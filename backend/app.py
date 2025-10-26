@@ -28,11 +28,12 @@ if "GOOGLE_API_KEY" not in os.environ:
 
 # --- 2. Define All Paths ---
 # PLEASE UPDATE THESE PATHS to match your system
-DOCUMENTS_PATH = r"K:\bit chatbot\backend\documents"
-EMBED_MODEL_PATH = r"K:\bit chatbot\backend\bge-base-en-v1.5"
-# --- MODIFIED: Path for FAISS index files ---
-FAISS_INDEX_PATH = r"./faiss_index"
-DATABASE_DIR = r"./database"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DOCUMENTS_PATH = os.path.join(BASE_DIR, "documents")
+EMBED_MODEL_PATH = os.path.join(BASE_DIR, "bge-base-en-v1.5")
+FAISS_INDEX_PATH = os.path.join(BASE_DIR, "faiss_index")
+DATABASE_DIR = os.path.join(BASE_DIR, "database")
+
 # DB for escalated queries
 ESCALATED_DB_PATH = os.path.join(DATABASE_DIR, "user_details.db")
 # DB for user stats

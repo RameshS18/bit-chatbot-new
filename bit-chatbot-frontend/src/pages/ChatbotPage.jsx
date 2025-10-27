@@ -101,7 +101,8 @@ const ChatbotPage = () => {
           }
           setFollowUpActions([
             "Tell me more about placements",
-            "List the CSE courses"
+            "tell me about campus life",
+            "tell me detail about CSE department"
           ]);
         }
       }, 5); // FASTER: Changed from 10ms to 5ms

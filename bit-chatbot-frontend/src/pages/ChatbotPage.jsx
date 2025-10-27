@@ -101,7 +101,6 @@ const ChatbotPage = () => {
           }
           setFollowUpActions([
             "Tell me more about placements",
-            "What are the hostel fees?",
             "List the CSE courses"
           ]);
         }

@@ -108,15 +108,15 @@ const AdminPage = () => {
     if (showLoading) setLoading(true)
     try {
       // --- Fetch 1: Stats ---
-      const statsResponse = await axios.get('http://127.0.0.1:5000/admin/stats')
+      const statsResponse = await axios.get('http://10.30.10.20:8000/admin/stats')
       setStats(statsResponse.data)
       
       // --- Fetch 2: Escalated Queries ---
-      const queriesResponse = await axios.get('http://127.0.0.1:5000/admin/escalated-queries')
+      const queriesResponse = await axios.get('http://10.30.10.20:8000/admin/escalated-queries')  
       setQueries(queriesResponse.data)
 
       // --- Fetch 3: All Users ---
-      const allUsersResponse = await axios.get('http://127.0.0.1:5000/admin/all-users')
+      const allUsersResponse = await axios.get('http://10.30.10.20:8000/admin/all-users')
       setAllUsers(allUsersResponse.data)
 
     } catch (error) {

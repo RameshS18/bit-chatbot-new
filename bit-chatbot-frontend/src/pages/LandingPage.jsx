@@ -92,8 +92,28 @@ const LandingPage = () => {
         return;
       }
 
+      // --- NEW CODE ---
+      // Send data to the backend /login endpoint
+      const response = await fetch('http://10.30.10.20:8000/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to register user on backend');
+      }
+      // --- END OF NEW CODE ---
+
       setShowSuccess(true);
     } catch (err) {
+      console.error(err); // Log the error for debugging
       setError('An error occurred. Please try again.');
     } finally {
       setIsLoading(false);

@@ -11,14 +11,13 @@ from flask_cors import CORS
 
 # --- LangChain Imports ---
 from langchain_community.document_loaders import DirectoryLoader
-# --- MODIFIED: Import FAISS instead of Chroma ---
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceBgeEmbeddings
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.prompts import PromptTemplate
-from langchain.schema.runnable import RunnablePassthrough
-from langchain.schema.output_parser import StrOutputParser
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_core.prompts import PromptTemplate
+from langchain_core.runnables import RunnablePassthrough
+from langchain_core.output_parsers import StrOutputParser
 
 # --- 1. Load Environment Variables ---
 load_dotenv()

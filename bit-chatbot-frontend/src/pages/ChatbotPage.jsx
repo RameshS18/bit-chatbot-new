@@ -58,7 +58,7 @@ const ChatbotPage = () => {
       // Set initial greeting message
       setMessages([{
         type: 'bot',
-        text: `Hi ${userData.name}! 👋\n\nI'm BIT-Bot, your virtual assistant for Bannari Amman Institute of Technology. I can help you with:\n\n• Admissions & Eligibility\n• Course Information\n• Campus Facilities\n• Placements & Internships\n• Hostel & Accommodation\n• Fee Structure\n\nWhat would you like to know?`,
+        text: `Hi ${userData.name}! 👋\n\nI'm BIT-Bot, your virtual assistant for Bannari Amman Institute of Technology. I can help you with:\n\n• Admissions & Eligibility\n• Course Information\n• Campus Facilities\n• Placements & Internships\n• Hostel & Accommodation\n\nWhat would you like to know?`,
         timestamp: new Date()
       }]);
     }

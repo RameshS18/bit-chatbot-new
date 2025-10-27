@@ -246,7 +246,7 @@ const ChatbotPage = () => {
               <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-green-400 border-2 border-purple-900 rounded-full"></div>
             </div>
             <div>
-              <h1 className="text-lg sm:text-xl font-bold text-white leading-tight">BIT Responsive Assistant</h1>
+              <h1 className="text-lg sm:text-xl font-bold text-white leading-tight">BITRA</h1>
               <p className="text-xs sm:text-sm text-purple-200 leading-tight flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse flex-shrink-0"></span>
                 <span>Online now</span>

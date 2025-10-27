@@ -94,7 +94,7 @@ const LandingPage = () => {
 
       // --- NEW CODE ---
       // Send data to the backend /login endpoint
-      const response = await fetch('http://10.30.10.20:8000/login', {
+      const response = await fetch('/api/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

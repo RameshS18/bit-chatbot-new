@@ -108,15 +108,15 @@ const AdminPage = () => {
     if (showLoading) setLoading(true)
     try {
       // --- Fetch 1: Stats ---
-      const statsResponse = await axios.get('http://10.30.10.20:8000/admin/stats')
+      const statsResponse = await axios.get('/api/admin/stats')
       setStats(statsResponse.data)
       
       // --- Fetch 2: Escalated Queries ---
-      const queriesResponse = await axios.get('http://10.30.10.20:8000/admin/escalated-queries')  
+      const queriesResponse = await axios.get('/api/admin/escalated-queries')  
       setQueries(queriesResponse.data)
 
       // --- Fetch 3: All Users ---
-      const allUsersResponse = await axios.get('http://10.30.10.20:8000/admin/all-users')
+      const allUsersResponse = await axios.get('/api/admin/all-users')
       setAllUsers(allUsersResponse.data)
 
     } catch (error) {
@@ -152,7 +152,7 @@ const AdminPage = () => {
 
   const handleUpdateQuery = async (queryId, remarks) => {
     try {
-      await axios.put(`http://127.0.0.1:5000/admin/update-query/${queryId}`, {
+      await axios.put(`/api/admin/update-query/${queryId}`, {
         status: 'Finished',
         remarks: remarks
       })

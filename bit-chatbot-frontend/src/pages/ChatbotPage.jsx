@@ -39,7 +39,7 @@ const ChatbotPage = () => {
     if (userData) {
       const loginUser = async () => {
         try {
-          const response = await fetch('http://10.30.10.20:8000/login', {
+          const response = await fetch('/api/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -182,7 +182,7 @@ const ChatbotPage = () => {
     setTypingText('');
 
     try {
-      const response = await fetch('http://10.30.10.20:8000/chat', {
+      const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

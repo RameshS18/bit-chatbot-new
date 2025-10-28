@@ -437,6 +437,7 @@ def get_admin_stats():
     1. Total Unique Users (from all_users table)
     2. Today's "Live" Users (users with a last_seen today)
     3. Total Escalated Queries (from escalated_queries table)
+    4. Total Solved Queries (queries with status 'Finished')
     """
     try:
         conn_users = sqlite3.connect(USERS_DB_PATH)
@@ -452,22 +453,28 @@ def get_admin_stats():
         today_users = cursor_users.fetchone()[0]
         conn_users.close()
         
-        # 3. Total Escalated Queries
+        # 3. Total Escalated Queries & 4. Total Solved Queries
         conn_details = sqlite3.connect(ESCALATED_DB_PATH)
         cursor_details = conn_details.cursor()
-        cursor_details.execute("SELECT COUNT(id) FROM escalated_queries")
+        
+        cursor_details.execute("SELECT COUNT(id) FROM escalated_queries WHERE status = 'Initiated'")
         total_escalated = cursor_details.fetchone()[0]
+        
+        cursor_details.execute("SELECT COUNT(id) FROM escalated_queries WHERE status = 'Finished'")
+        total_solved = cursor_details.fetchone()[0]
+        
         conn_details.close()
 
         stats = {
             "totalUniqueUsers": total_unique_users,
             "todayUsers": today_users,
-            "totalEscalated": total_escalated
+            "totalEscalated": total_escalated,
+            "totalSolved": total_solved
         }
         return jsonify(stats)
         
     except Exception as e:
-        print(f"Error in /admin/stats: {e}")
+        print(f"Error in /admin/stats: {e}")    
         return jsonify({"error": "An internal server error occurred"}), 500
 
 @app.route('/admin/escalated-queries', methods=['GET'])
@@ -550,6 +557,132 @@ def update_escalated_query(query_id):
         print(f"Error in /admin/update-query: {e}")
         return jsonify({"error": "An internal server error occurred"}), 500
     
+# --- NEW ENDPOINT: Get escalated users grouped ---
+@app.route('/admin/escalated-users', methods=['GET'])
+def get_escalated_users():
+    """
+    Fetches unique users who have escalated queries,
+    along with the count of their escalated queries.
+    """
+    try:
+        conn = sqlite3.connect(ESCALATED_DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT 
+                user_name,
+                email,
+                phone_number,
+                COUNT(*) as query_count
+            FROM escalated_queries
+            WHERE status = 'Initiated'
+            GROUP BY email
+            ORDER BY query_count DESC, user_name ASC
+        """)
+        
+        rows = cursor.fetchall()
+        users = [dict(row) for row in rows]
+        
+        conn.close()
+        return jsonify(users)
+        
+    except Exception as e:
+        print(f"Error in /admin/escalated-users: {e}")
+        return jsonify({"error": "An internal server error occurred"}), 500
+
+
+# --- NEW ENDPOINT: Get queries for a specific user ---
+@app.route('/admin/user-queries/<email>', methods=['GET'])
+def get_user_queries(email):
+    """
+    Fetches all escalated queries for a specific user email.
+    """
+    try:
+        conn = sqlite3.connect(ESCALATED_DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT * FROM escalated_queries 
+            WHERE email = ? 
+            ORDER BY timestamp DESC
+        """, (email,))
+        
+        rows = cursor.fetchall()
+        queries = [dict(row) for row in rows]
+        
+        conn.close()
+        return jsonify(queries)
+        
+    except Exception as e:
+        print(f"Error in /admin/user-queries: {e}")
+        return jsonify({"error": "An internal server error occurred"}), 500
+
+
+# --- NEW ENDPOINT: Get solved queries ---
+# --- NEW ENDPOINT: Get users with solved queries ---
+@app.route('/admin/solved-users', methods=['GET'])
+def get_solved_users():
+    """
+    Fetches unique users who have solved queries,
+    along with the count of their solved queries.
+    """
+    try:
+        conn = sqlite3.connect(ESCALATED_DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT 
+                user_name,
+                email,
+                phone_number,
+                COUNT(*) as query_count
+            FROM escalated_queries
+            WHERE status = 'Finished'
+            GROUP BY email
+            ORDER BY query_count DESC, user_name ASC
+        """)
+        
+        rows = cursor.fetchall()
+        users = [dict(row) for row in rows]
+        
+        conn.close()
+        return jsonify(users)
+        
+    except Exception as e:
+        print(f"Error in /admin/solved-users: {e}")
+        return jsonify({"error": "An internal server error occurred"}), 500
+
+# --- NEW ENDPOINT: Get today's users ---
+@app.route('/admin/today-users', methods=['GET'])
+def get_today_users():
+    """
+    Fetches all users who were active today.
+    """
+    try:
+        today_str = str(date.today())
+        
+        conn = sqlite3.connect(USERS_DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT * FROM all_users 
+            WHERE last_seen LIKE ? 
+            ORDER BY last_seen DESC
+        """, (today_str + '%',))
+        
+        rows = cursor.fetchall()
+        users = [dict(row) for row in rows]
+        
+        conn.close()
+        return jsonify(users)
+        
+    except Exception as e:
+        print(f"Error in /admin/today-users: {e}")
+        return jsonify({"error": "An internal server error occurred"}), 500
 
 
 # --- 12. Run the Flask App ---

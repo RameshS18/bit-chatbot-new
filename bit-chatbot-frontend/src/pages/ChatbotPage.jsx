@@ -1,9 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-// --- CHANGED: Removed 'Bot' ---
 import { Send, User, Loader } from 'lucide-react';
 
-// --- NEW: Path to your bot icon in the 'public' folder ---
-const botIconUrl = '/images/robot 1.png';
+const botIconUrl = '/images/new image.jpg';
 
 const ChatbotPage = () => {
   const [messages, setMessages] = useState([]);
@@ -24,9 +22,8 @@ const ChatbotPage = () => {
     if (storedUser) {
       setUserData(JSON.parse(storedUser));
     } else {
-      // Demo user data if not found
       setUserData({
-        name: 'Student',
+        name: 'Test',
         email: 'student@bit.edu',
         phone: '1234567890',
         userType: 'student'
@@ -55,7 +52,6 @@ const ChatbotPage = () => {
       };
       loginUser();
 
-      // Set initial greeting message
       setMessages([{
         type: 'bot',
         text: `Hi ${userData.name}! 👋\n\nI'm BIT-Bot, your virtual assistant for Bannari Amman Institute of Technology. I can help you with:\n\n• Admissions & Eligibility\n• Course Information\n• Campus Facilities\n• Placements & Internships\n• Hostel & Accommodation\n\nWhat would you like to know?`,
@@ -71,7 +67,7 @@ const ChatbotPage = () => {
     }
   }, [messages, typingText]);
 
-  // Typing animation effect - FASTER SPEED (5ms instead of 10ms)
+  // Typing animation effect
   useEffect(() => {
     if (typingIntervalRef.current) {
       clearInterval(typingIntervalRef.current);
@@ -101,11 +97,11 @@ const ChatbotPage = () => {
           }
           setFollowUpActions([
             "Tell me more about placements",
-            "tell me about campus life",
-            "tell me detail about CSE department"
+            "Tell me about campus life",
+            "Tell me detail about CSE department"
           ]);
         }
-      }, 5); // FASTER: Changed from 10ms to 5ms
+      }, 5);
     }
 
     return () => {
@@ -115,7 +111,7 @@ const ChatbotPage = () => {
     };
   }, [fullResponse, isLoading]);
 
-  // Format bot messages - USING DOTS (•) instead of asterisks
+  // Format bot messages
   const formatBotMessage = (text) => {
     let formatted = text
       .replace(/&/g, '&amp;')
@@ -124,20 +120,12 @@ const ChatbotPage = () => {
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;');
     
-    // Bold text with **
     formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-purple-900">$1</strong>');
-    
-    // Convert asterisks at start of lines to bullet points (dots)
     formatted = formatted.replace(/^\* /gm, '• ');
     formatted = formatted.replace(/\n\* /g, '\n• ');
-    
-    // Line breaks
     formatted = formatted.replace(/\n/g, '<br />');
-    
-    // Style bullet points
     formatted = formatted.replace(/•/g, '<span class="text-purple-600">•</span>');
     
-    // Links
     formatted = formatted.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (match, text, url) => {
       if (url.startsWith('http://') || url.startsWith('https://')) {
         return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-purple-600 font-semibold underline hover:text-purple-800 transition-colors break-all">${text}</a>`;
@@ -233,22 +221,21 @@ const ChatbotPage = () => {
   ];
 
   return (
-    <div className="flex flex-col h-screen w-full max-w-full bg-gradient-to-b from-purple-50 to-white font-sans overflow-hidden">
+    <div className="fixed inset-0 flex flex-col bg-gradient-to-b from-purple-50 to-white font-sans">
       
-      {/* Header */}
-      <header className="relative px-4 sm:px-6 py-4 bg-gradient-to-r from-purple-900 via-purple-800 to-purple-900 shadow-lg z-10 flex-shrink-0">
+      {/* Fixed Header */}
+      <header className="fixed top-0 left-0 right-0 z-50 px-4 sm:px-6 py-3 bg-gradient-to-r from-purple-900 via-purple-800 to-purple-900 shadow-lg">
         <div className="flex items-center justify-between max-w-4xl mx-auto">
-          <div className="flex items-center gap-3 sm:gap-4">
+          <div className="flex items-center gap-3">
             <div className="relative flex-shrink-0">
-              {/* --- CHANGED: Replaced <Bot> with <img> --- */}
-              <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-white flex items-center justify-center shadow-lg overflow-hidden">
+              <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-lg overflow-hidden">
                 <img src={botIconUrl} alt="BIT Bot Icon" className="w-full h-full object-cover" />
               </div>
-              <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-green-400 border-2 border-purple-900 rounded-full"></div>
+              <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-400 border-2 border-purple-900 rounded-full"></div>
             </div>
             <div>
-              <h1 className="text-lg sm:text-xl font-bold text-white leading-tight">BITRA</h1>
-              <p className="text-xs sm:text-sm text-purple-200 leading-tight flex items-center gap-1.5">
+              <h1 className="text-lg font-bold text-white leading-tight">BITRA</h1>
+              <p className="text-xs text-purple-200 leading-tight flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse flex-shrink-0"></span>
                 <span>Online now</span>
               </p>
@@ -265,9 +252,9 @@ const ChatbotPage = () => {
         </div>
       </header>
 
-      {/* User Info Bar - Mobile */}
+      {/* User Info Bar - Mobile (Fixed below header) */}
       {userData && (
-        <div className="sm:hidden bg-white border-b px-4 py-2 flex-shrink-0">
+        <div className="sm:hidden fixed top-[60px] left-0 right-0 z-40 bg-white border-b px-4 py-2">
           <p className="text-sm text-gray-600">
             Welcome, <span className="font-semibold text-gray-800">{userData.name}</span>
             <span className="mx-2">•</span>
@@ -276,17 +263,23 @@ const ChatbotPage = () => {
         </div>
       )}
 
-      {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 sm:px-6 py-6 flex flex-col gap-4 custom-scrollbar">
-        <div className="max-w-4xl mx-auto w-full flex flex-col gap-4">
+      {/* Messages Area - Scrollable with proper spacing */}
+      <div 
+        className="flex-1 overflow-y-auto overflow-x-hidden px-4 sm:px-6 py-4 custom-scrollbar"
+        style={{ 
+          marginTop: 'calc(60px + 44px)', // Header + user info bar on mobile
+          marginBottom: '80px', // Input area height
+          WebkitOverflowScrolling: 'touch' // Smooth scrolling on iOS
+        }}
+      >
+        <div className="max-w-4xl mx-auto w-full flex flex-col gap-4 pb-4">
           
           {messages.map((message, index) => (
             <div 
               key={index}
               className={`flex items-end gap-2 sm:gap-3 animate-slideUp ${message.type === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
             >
-              {/* Avatar --- CHANGED: Replaced <Bot> with <img> --- */}
-              <div className={`flex-shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-full shadow-md ${
+              <div className={`flex-shrink-0 w-8 h-8 rounded-full shadow-md ${
                 message.type === 'bot' 
                   ? 'bg-white overflow-hidden' 
                   : 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center text-sm font-bold'
@@ -304,7 +297,7 @@ const ChatbotPage = () => {
                     ? 'bg-gradient-to-br from-purple-600 to-purple-700 text-white rounded-br-md'
                     : 'bg-white text-gray-800 border border-gray-100 rounded-bl-md'
                 }`}>
-                  <div className="text-[15px] sm:text-base leading-relaxed break-words overflow-wrap-anywhere">
+                  <div className="text-[15px] leading-relaxed break-words overflow-wrap-anywhere">
                     {message.isHtml ? (
                       <div dangerouslySetInnerHTML={{ __html: message.text }} />
                     ) : (
@@ -341,14 +334,13 @@ const ChatbotPage = () => {
           {/* Typing indicator */}
           {isLoading && (
             <div className="flex items-end gap-2 sm:gap-3 animate-slideUp">
-              {/* --- CHANGED: Replaced <Bot> with <img> --- */}
-              <div className="flex-shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-white shadow-md overflow-hidden">
+              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-white shadow-md overflow-hidden">
                 <img src={botIconUrl} alt="Bot" className="w-full h-full object-cover" />
               </div>
               <div className="flex flex-col items-start max-w-[75%] sm:max-w-[70%]">
                 {typingText ? (
                   <div className="bg-white border border-gray-100 px-4 py-3 rounded-2xl rounded-bl-md shadow-md">
-                    <div className="text-[15px] sm:text-base leading-relaxed text-gray-800 break-words overflow-wrap-anywhere">
+                    <div className="text-[15px] leading-relaxed text-gray-800 break-words overflow-wrap-anywhere">
                       <div dangerouslySetInnerHTML={{ __html: typingText }} />
                       <span className="inline-block w-0.5 h-4 bg-purple-600 ml-1 animate-blink"></span>
                     </div>
@@ -358,7 +350,7 @@ const ChatbotPage = () => {
                     <div className="flex items-center gap-1.5">
                       <span className="w-2 h-2 bg-purple-600 rounded-full animate-bounce1"></span>
                       <span className="w-2 h-2 bg-purple-600 rounded-full animate-bounce2"></span>
-      <span className="w-2 h-2 bg-purple-600 rounded-full animate-bounce3"></span>
+                      <span className="w-2 h-2 bg-purple-600 rounded-full animate-bounce3"></span>
                     </div>
                   </div>
                 )}
@@ -368,7 +360,7 @@ const ChatbotPage = () => {
           
           {/* Follow-up actions */}
           {!isLoading && followUpActions.length > 0 && (
-            <div className="w-full animate-slideUp pt-4">
+            <div className="w-full animate-slideUp pt-2">
               <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar-horizontal">
                 {followUpActions.map((action, idx) => (
                   <button 
@@ -387,40 +379,60 @@ const ChatbotPage = () => {
         </div>
       </div>
 
-      {/* Input Area */}
-      <div className="border-t border-gray-200 bg-white shadow-2xl flex-shrink-0">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4">
-          <div className="flex gap-3 items-end">
+      {/* Fixed Input Area at Bottom */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-gray-200 bg-white shadow-2xl safe-area-bottom">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-3">
+          <div className="flex gap-2 items-end">
             <div className="flex-1 relative">
               <textarea
                 ref={inputRef}
                 rows="1"
-                className="w-full border-2 border-gray-200 px-4 py-3 pr-12 rounded-2xl bg-gray-50 text-gray-800 text-base outline-none transition-all focus:border-purple-500 focus:bg-white focus:shadow-lg resize-none leading-6"
+                className="w-full border-2 border-gray-200 px-4 py-2.5 pr-3 rounded-2xl bg-gray-50 text-gray-800 text-base outline-none transition-all focus:border-purple-500 focus:bg-white focus:shadow-lg resize-none leading-6"
                 value={inputMessage}
                 onChange={handleInputChange}
                 onKeyDown={handleKeyPress}
                 placeholder="Type your message..."
                 disabled={isLoading}
                 maxLength={500}
-                style={{ minHeight: '48px', maxHeight: '128px', overflowY: 'hidden' }}
+                style={{ minHeight: '44px', maxHeight: '128px', overflowY: 'hidden' }}
               />
             </div>
             
             <button 
               onClick={() => handleSendMessage()}
               disabled={!inputMessage.trim() || isLoading} 
-              className="flex-shrink-0 w-12 h-12 bg-gradient-to-r from-purple-600 to-purple-700 rounded-xl flex items-center justify-center shadow-lg hover:shadow-xl active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+              className="flex-shrink-0 w-11 h-11 bg-gradient-to-r from-purple-600 to-purple-700 rounded-xl flex items-center justify-center shadow-lg hover:shadow-xl active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
             >
               <Send size={20} className="text-white" />
             </button>
           </div>
-          <p className="text-xs text-gray-500 mt-2 text-center">
+          <p className="text-xs text-gray-500 mt-1.5 text-center">
             Press Enter to send • Shift + Enter for new line
           </p>
         </div>
       </div>
 
       <style>{`
+        /* Safe area for notched devices */
+        .safe-area-bottom {
+          padding-bottom: env(safe-area-inset-bottom);
+        }
+
+        /* Ensure full height on mobile */
+        html, body, #root {
+          height: 100%;
+          overflow: hidden;
+          position: fixed;
+          width: 100%;
+        }
+
+        /* Fix for Safari/Brave mobile browsers */
+        @supports (-webkit-touch-callout: none) {
+          .custom-scrollbar {
+            -webkit-overflow-scrolling: touch;
+          }
+        }
+
         @keyframes slideUp {
           from { opacity: 0; transform: translateY(10px); }
           to { opacity: 1; transform: translateY(0); }

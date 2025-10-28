@@ -1,0 +1,6 @@
+to start nginx (dont stop that if stop use this cmd):
+in -> bit-chatbot-new -> sudo systemctl start nginx
+
+
+to do this backend code update:
+after git pull -> bit-chatbot-new/in backend not bit-chatbot-new (any one) -> sudo systemctl restart bit-backend.service

@@ -4,7 +4,6 @@ import atexit
 import sqlite3  # Import SQLite
 from dotenv import load_dotenv
 from datetime import datetime, date
-from zoneinfo import ZoneInfo  # <-- ADDED for timezone handling
 
 # --- Flask Imports ---
 from flask import Flask, request, jsonify
@@ -39,15 +38,6 @@ ESCALATED_DB_PATH = os.path.join(DATABASE_DIR, "user_details.db")
 # DB for user stats
 USERS_DB_PATH = os.path.join(DATABASE_DIR, "all_users.db")
 
-# --- NEW: Timezone and Format Constants ---
-IST = ZoneInfo("Asia/Kolkata")
-# This format (YYYY-MM-DD HH:MM:SS AM/PM) is sortable and queryable by date
-DB_TIMESTAMP_FORMAT = '%Y-%m-%d %I:%M:%S %p'
-
-# --- NEW: Helper function for getting IST timestamp ---
-def get_ist_timestamp():
-    """Returns the current time in IST as a formatted string."""
-    return datetime.now(IST).strftime(DB_TIMESTAMP_FORMAT)
 
 # --- 3. Initialize SQLite Databases ---
 def setup_databases():
@@ -192,7 +182,7 @@ retriever = vectorstore.as_retriever(search_kwargs={"k": 30})
 # --- END OF CHANGE ---
 # ---
 
-llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.3) # Using 1.5 Flash
+llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.3)
 
 template = """
 You are **BIT Bot**, the official virtual assistant of **Bannari Amman Institute of Technology (BIT)**.
@@ -264,9 +254,9 @@ Respond in a **structured, short, and crisp** format — all details must be acc
 BEHAVIOR RULES:
         1. College relevance check: If the user’s question is not related to BIT, reply exactly: "I’m the official assistant of Bannari Amman Institute of Technology. Please ask questions related to BIT College."
         2. Use ONLY the provided Context. Do NOT use outside knowledge. Your answer must be based on the retrieved documents:
-            • **If the Context confirms the information:** Provide the answer directly from the context.
-            • **If the Context denies the information:** You must state that it is not available. (Example: If the user asks for "Aerospace Department" and the context lists all departments *without* Aerospace, you must reply: "The Aerospace department is not available at BIT.")
-            • **If the Context is missing or irrelevant:** Only if the context truly does not have the information to confirm or deny the query, reply exactly: "We have received your query, soon our concerned department will contact you. Thank You!"
+           • **If the Context confirms the information:** Provide the answer directly from the context.
+           • **If the Context denies the information:** You must state that it is not available. (Example: If the user asks for "Aerospace Department" and the context lists all departments *without* Aerospace, you must reply: "The Aerospace department is not available at BIT.")
+           • **If the Context is missing or irrelevant:** Only if the context truly does not have the information to confirm or deny the query, reply exactly: "We have received your query, soon our concerned department will contact you. Thank You!"
         3. General questions: If the user greets you or asks who you are, respond politely: “I’m BIT Bot, the official assistant of Bannari Amman Institute of Technology. How can I help you today?”
 
 CONTEXT:
@@ -299,7 +289,7 @@ print("Flask app created with CORS enabled.")
 def update_user_last_seen(email):
     """Updates the last_seen timestamp for a user based on their email."""
     try:
-        timestamp = get_ist_timestamp() # <-- MODIFIED
+        timestamp = datetime.now().isoformat()
         conn = sqlite3.connect(USERS_DB_PATH)
         cursor = conn.cursor()
         cursor.execute(
@@ -329,7 +319,7 @@ def login_user():
         if not email:
             return jsonify({"error": "Email is required"}), 400
 
-        timestamp = get_ist_timestamp() # <-- MODIFIED
+        timestamp = datetime.now().isoformat()
         conn = sqlite3.connect(USERS_DB_PATH)
         cursor = conn.cursor()
         
@@ -401,7 +391,7 @@ def chat():
         if answer.strip() == trigger_message:
             print("Trigger message detected! Saving to escalated_queries.db...")
             try:
-                timestamp = get_ist_timestamp() # <-- MODIFIED
+                timestamp = datetime.now().isoformat()
                 conn_details = sqlite3.connect(ESCALATED_DB_PATH)
                 cursor_details = conn_details.cursor()
                 
@@ -458,8 +448,7 @@ def get_admin_stats():
         total_unique_users = cursor_users.fetchone()[0]
         
         # 2. Today's Users
-        today_str = str(date.today()) # This gives 'YYYY-MM-DD'
-        # The query "LIKE 'YYYY-MM-DD%'" will match our new format
+        today_str = str(date.today())
         cursor_users.execute("SELECT COUNT(id) FROM all_users WHERE last_seen LIKE ?", (today_str + '%',))
         today_users = cursor_users.fetchone()[0]
         conn_users.close()
@@ -485,7 +474,7 @@ def get_admin_stats():
         return jsonify(stats)
         
     except Exception as e:
-        print(f"Error in /admin/stats: {e}")      
+        print(f"Error in /admin/stats: {e}")    
         return jsonify({"error": "An internal server error occurred"}), 500
 
 @app.route('/admin/escalated-queries', methods=['GET'])
@@ -497,7 +486,7 @@ def get_escalated_queries():
         conn.row_factory = sqlite3.Row 
         cursor = conn.cursor()
         
-        # Fetch newest first (string sort works due to YYYY-MM-DD format)
+        # Fetch newest first
         cursor.execute("SELECT * FROM escalated_queries ORDER BY timestamp DESC")
         rows = cursor.fetchall()
         
@@ -521,7 +510,7 @@ def get_all_users():
         conn.row_factory = sqlite3.Row 
         cursor = conn.cursor()
         
-        # Fetch newest seen first (string sort works due to YYYY-MM-DD format)
+        # Fetch newest seen first
         cursor.execute("SELECT * FROM all_users ORDER BY last_seen DESC")
         rows = cursor.fetchall()
         

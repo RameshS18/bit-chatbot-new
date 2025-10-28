@@ -7,3 +7,28 @@ after git pull -> bit-chatbot-new/in backend not bit-chatbot-new (any one) -> su
 
 start -> sudo systemctl start bit-backend.service
 stop -> sudo systemctl stop bit-backend.service
+
+
+for the doing frontend
+ubuntu@chatbot:~/bit-chatbot-new$ cd bit-chatbot-frontend
+ubuntu@chatbot:~/bit-chatbot-new/bit-chatbot-frontend$
+
+sudo rm -rf dist
+
+cd .. # to the bit-chatbot-new
+
+
+ubuntu@chatbot:~/bit-chatbot-new$ git pull
+
+
+ubuntu@chatbot:~/bit-chatbot-new$ cd bit-chatbot-frontend
+ubuntu@chatbot:~/bit-chatbot-new/bit-chatbot-frontend$
+
+
+ubuntu@chatbot:~/bit-chatbot-new/bit-chatbot-frontend$ npm run build
+
+
+if you stop the backend then 
+again "cd .." to bit-chatbot-new
+
+then -> sudo systemctl start bit-backend.service

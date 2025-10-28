@@ -11,39 +11,10 @@ const ChatbotPage = () => {
   const [typingText, setTypingText] = useState('');
   const [fullResponse, setFullResponse] = useState('');
   const [followUpActions, setFollowUpActions] = useState([]);
-  const [viewportHeight, setViewportHeight] = useState(window.innerHeight);
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const typingIntervalRef = useRef(null);
-
-  // Handle viewport height changes for mobile keyboard
-  useEffect(() => {
-    const handleResize = () => {
-      setViewportHeight(window.innerHeight);
-    };
-
-    const handleFocus = () => {
-      setTimeout(() => {
-        setViewportHeight(window.innerHeight);
-        if (messagesEndRef.current) {
-          messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
-        }
-      }, 300);
-    };
-
-    window.addEventListener('resize', handleResize);
-    if (inputRef.current) {
-      inputRef.current.addEventListener('focus', handleFocus);
-    }
-
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      if (inputRef.current) {
-        inputRef.current.removeEventListener('focus', handleFocus);
-      }
-    };
-  }, []);
 
   // Load user data from localStorage
   useEffect(() => {
@@ -250,7 +221,7 @@ const ChatbotPage = () => {
   ];
 
   return (
-    <div className="fixed inset-0 flex flex-col bg-gradient-to-b from-purple-50 to-white font-sans" style={{ height: `${viewportHeight}px` }}>
+    <div className="fixed inset-0 flex flex-col bg-gradient-to-b from-purple-50 to-white font-sans">
       
       {/* Fixed Header */}
       <header className="fixed top-0 left-0 right-0 z-50 px-4 sm:px-6 py-3 bg-gradient-to-r from-purple-900 via-purple-800 to-purple-900 shadow-lg">

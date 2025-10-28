@@ -4,3 +4,6 @@ in -> bit-chatbot-new -> sudo systemctl start nginx
 
 to do this backend code update:
 after git pull -> bit-chatbot-new/in backend not bit-chatbot-new (any one) -> sudo systemctl restart bit-backend.service
+
+start -> sudo systemctl start bit-backend.service
+stop -> sudo systemctl stop bit-backend.service

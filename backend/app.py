@@ -3,7 +3,14 @@ import sys
 import atexit
 import sqlite3  # Import SQLite
 from dotenv import load_dotenv
-from datetime import datetime, date
+from datetime import datetime, date, timedelta  # Added timedelta
+import pytz  # Import pytz for time zone support
+
+# --- NEW: Imports for OTP Email ---
+import smtplib
+import ssl
+import random
+import hashlib
 
 # --- Flask Imports ---
 from flask import Flask, request, jsonify
@@ -25,6 +32,15 @@ if "GOOGLE_API_KEY" not in os.environ:
     print("Error: GOOGLE_API_KEY not found in .env file.")
     sys.exit(1)
 
+# --- NEW: Load Email Credentials for OTP ---
+EMAIL_SENDER = os.environ.get("email_id")
+EMAIL_PASSWORD = os.environ.get("app_password")
+
+if not EMAIL_SENDER or not EMAIL_PASSWORD:
+    print("Error: email_id or app_password not found in .env file.")
+    print("Please add them to your .env file to enable OTP.")
+    sys.exit(1)
+
 # --- 2. Define All Paths ---
 # PLEASE UPDATE THESE PATHS to match your system
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -37,12 +53,18 @@ DATABASE_DIR = os.path.join(BASE_DIR, "database")
 ESCALATED_DB_PATH = os.path.join(DATABASE_DIR, "user_details.db")
 # DB for user stats
 USERS_DB_PATH = os.path.join(DATABASE_DIR, "all_users.db")
+# --- NEW: DB for OTP ---
+OTP_DB_PATH = os.path.join(DATABASE_DIR, "otp.db")
+
+
+# --- NEW: Define IST Timezone ---
+IST_TZ = pytz.timezone('Asia/Kolkata')
 
 
 # --- 3. Initialize SQLite Databases ---
 def setup_databases():
     """
-    Creates the 'database' directory and initializes both database tables
+    Creates the 'database' directory and initializes all database tables
     if they don't already exist.
     """
     try:
@@ -85,6 +107,22 @@ def setup_databases():
         conn_users.commit()
         conn_users.close()
         print(f"All users database initialized: {USERS_DB_PATH}")
+
+        # --- NEW: DB 3: OTP Requests ---
+        conn_otp = sqlite3.connect(OTP_DB_PATH)
+        cursor_otp = conn_otp.cursor()
+        cursor_otp.execute("""
+        CREATE TABLE IF NOT EXISTS otp_requests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT NOT NULL,
+            otp_hash TEXT NOT NULL,
+            expires_at TEXT NOT NULL
+        )
+        """)
+        conn_otp.commit()
+        conn_otp.close()
+        print(f"OTP database initialized: {OTP_DB_PATH}")
+
 
     except Exception as e:
         print(f"Error initializing SQLite databases: {e}")
@@ -218,7 +256,7 @@ Your job is to first check **whether the question is related to BIT College or t
  GENERAL BEHAVIOR RULES:
 ────────────────────────────
 - If the user greets or asks who you are, reply:
-  “I’m BIT Bot, the official assistant of Bannari Amman Institute of Technology. How can I help you today?”
+  “I’m BITRA, the official assistant of Bannari Amman Institute of Technology. How can I help you today?”
 
 - Be polite, disciplined, and respectful.
 - Never generate false or assumed answers.
@@ -289,7 +327,8 @@ print("Flask app created with CORS enabled.")
 def update_user_last_seen(email):
     """Updates the last_seen timestamp for a user based on their email."""
     try:
-        timestamp = datetime.now().isoformat()
+        # --- MODIFIED: Use IST Timezone ---
+        timestamp = datetime.now(IST_TZ).isoformat()
         conn = sqlite3.connect(USERS_DB_PATH)
         cursor = conn.cursor()
         cursor.execute(
@@ -303,23 +342,166 @@ def update_user_last_seen(email):
         print(f"Error updating last_seen for {email}: {e}")
 
 
-# --- 9. NEW Endpoint: User Login/Registration ---
+# --- 9. NEW: OTP Helper Functions ---
+
+def generate_otp(length=6):
+    """Generates a random 6-digit OTP."""
+    return "".join([str(random.randint(0, 9)) for _ in range(length)])
+
+def hash_otp(otp):
+    """Hashes the OTP using SHA-256."""
+    return hashlib.sha256(otp.encode()).hexdigest()
+
+def send_otp_email(recipient_email, otp):
+    """Sends the OTP to the user's email using SMTP."""
+    subject = "Your BITRA Chatbot Verification Code"
+    body = f"""
+    <html>
+    <head>
+        <style>
+            .container {{ font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 5px; max-width: 600px; margin: auto; }}
+            .header {{ font-size: 24px; color: #333; }}
+            .otp-code {{
+                font-size: 36px;
+                font-weight: bold;
+                color: #004a99;
+                margin: 20px 0;
+                letter-spacing: 2px;
+                text-align: center;
+                padding: 10px;
+                background-color: #f4f4f4;
+                border-radius: 5px;
+            }}
+            .footer {{ font-size: 12px; color: #888; margin-top: 20px; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">Hello,</div>
+            <p>Thank you for verifying your email for the BITRA Chatbot.</p>
+            <p>Your One-Time Password (OTP) is:</p>
+            <div class="otp-code">{otp}</div>
+            <p>This code is valid for 10 minutes.</p>
+            <p class="footer">
+                Best regards,<br>
+                Bannari Amman Institute of Technology
+            </p>
+        </div>
+    </body>
+    </html>
+    """
+    
+    # Using 'MIME-Version' and 'Content-Type' for HTML emails
+    message = f"Subject: {subject}\nFrom: {EMAIL_SENDER}\nTo: {recipient_email}\nMIME-Version: 1.0\nContent-Type: text/html\n\n{body}"
+    
+    context = ssl.create_default_context()
+    try:
+        # Using SMTP_SSL for a secure connection from the start
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context) as server:
+            server.login(EMAIL_SENDER, EMAIL_PASSWORD)
+            # Sendmail needs the message to be encoded
+            server.sendmail(EMAIL_SENDER, recipient_email, message.encode('utf-8'))
+        print(f"Successfully sent OTP to {recipient_email}")
+        return True
+    except Exception as e:
+        print(f"Error sending email to {recipient_email}: {e}")
+        return False
+
+
+# --- 10. NEW Endpoint: Request OTP ---
+@app.route('/request-otp', methods=['POST'])
+def request_otp():
+    """
+    Generates an OTP, hashes it, stores it in the otp_db,
+    and sends it to the user's email.
+    """
+    try:
+        data = request.json
+        email = data.get('email')
+        
+        if not email:
+            return jsonify({"error": "Email is required"}), 400
+
+        otp = generate_otp()
+        otp_hashed = hash_otp(otp)
+        
+        # Use IST Timezone
+        now = datetime.now(IST_TZ)
+        expires = now + timedelta(minutes=10) # OTP expires in 10 minutes
+        expires_at_str = expires.isoformat()
+
+        conn = sqlite3.connect(OTP_DB_PATH)
+        cursor = conn.cursor()
+        
+        # IMPORTANT: Delete any old, unexpired OTPs for this user first
+        cursor.execute("DELETE FROM otp_requests WHERE email = ?", (email,))
+        
+        # Insert the new OTP
+        cursor.execute(
+            "INSERT INTO otp_requests (email, otp_hash, expires_at) VALUES (?, ?, ?)",
+            (email, otp_hashed, expires_at_str)
+        )
+        conn.commit()
+        conn.close()
+        
+        # Send the email
+        if not send_otp_email(email, otp):
+            return jsonify({"error": "Failed to send OTP email"}), 500
+            
+        return jsonify({"status": "success", "message": "OTP sent to your email."})
+
+    except Exception as e:
+        print(f"Error in /request-otp: {e}")
+        return jsonify({"error": "An internal server error occurred"}), 500
+
+
+# --- 11. MODIFIED Endpoint: Verify OTP & Login/Register ---
 @app.route('/login', methods=['POST'])
 def login_user():
     """
-    Logs a user in. If they are new (based on email), adds them to the
-    all_users table. Otherwise, just updates their last_seen timestamp.
+    Verifies a user's OTP. If valid, logs them in.
+    If they are new (based on email), adds them to the all_users table.
+    Otherwise, just updates their last_seen timestamp.
     """
     try:
         data = request.json
         user_name = data.get('name')
         email = data.get('email')
         phone = data.get('phone')
+        otp_submitted = data.get('otp') # <-- NEW: Get OTP from request
 
-        if not email:
-            return jsonify({"error": "Email is required"}), 400
+        if not email or not otp_submitted:
+            return jsonify({"error": "Email and OTP are required"}), 400
+            
+        # --- NEW: OTP VERIFICATION BLOCK ---
+        conn_otp = sqlite3.connect(OTP_DB_PATH)
+        cursor_otp = conn_otp.cursor()
+        
+        now_str = datetime.now(IST_TZ).isoformat()
+        otp_submitted_hash = hash_otp(otp_submitted)
+        
+        # Check if a valid, unexpired OTP exists
+        cursor_otp.execute(
+            "SELECT id FROM otp_requests WHERE email = ? AND otp_hash = ? AND expires_at > ?",
+            (email, otp_submitted_hash, now_str)
+        )
+        valid_otp_row = cursor_otp.fetchone()
+        
+        if not valid_otp_row:
+            # Invalid OTP or expired
+            conn_otp.close()
+            return jsonify({"error": "Invalid or expired OTP"}), 401 # 401 Unauthorized
+            
+        # --- SUCCESS: OTP is valid ---
+        # Delete the OTP immediately after use (as you requested)
+        cursor_otp.execute("DELETE FROM otp_requests WHERE id = ?", (valid_otp_row[0],))
+        conn_otp.commit()
+        conn_otp.close()
+        print(f"OTP verified for {email}. Proceeding with login/registration.")
+        # --- END OF OTP VERIFICATION BLOCK ---
 
-        timestamp = datetime.now().isoformat()
+        # --- Existing Login/Registration Logic (This part is untouched) ---
+        timestamp = datetime.now(IST_TZ).isoformat()
         conn = sqlite3.connect(USERS_DB_PATH)
         cursor = conn.cursor()
         
@@ -334,7 +516,7 @@ def login_user():
                 (timestamp, email)
             )
             print(f"Existing user logged in: {email}")
-            message = "User updated"
+            message = "Login successful"
         else:
             # New user, insert them
             cursor.execute(
@@ -345,23 +527,24 @@ def login_user():
                 (user_name, email, phone, timestamp, timestamp)
             )
             print(f"New user registered: {email}")
-            message = "User registered"
+            message = "Registration successful"
 
         conn.commit()
         conn.close()
-        return jsonify({"status": "success", "message": message})
+        # Return a clear success message
+        return jsonify({"status": "success", "message": message, "email": email})
 
     except sqlite3.IntegrityError:
         # This handles a rare race condition, acts like an update
         conn.close()
         update_user_last_seen(email)
-        return jsonify({"status": "success", "message": "User updated"})
+        return jsonify({"status": "success", "message": "Login successful", "email": email})
     except Exception as e:
         print(f"Error in /login: {e}")
         return jsonify({"error": "An internal server error occurred"}), 500
 
 
-# --- 10. Chatbot API Route (Updated) ---
+# --- 12. Chatbot API Route (Updated) ---
 @app.route('/chat', methods=['POST'])
 def chat():
     try:
@@ -391,7 +574,8 @@ def chat():
         if answer.strip() == trigger_message:
             print("Trigger message detected! Saving to escalated_queries.db...")
             try:
-                timestamp = datetime.now().isoformat()
+                # --- MODIFIED: Use IST Timezone ---
+                timestamp = datetime.now(IST_TZ).isoformat()
                 conn_details = sqlite3.connect(ESCALATED_DB_PATH)
                 cursor_details = conn_details.cursor()
                 
@@ -428,7 +612,7 @@ def chat():
         return jsonify({"error": "An internal server error occurred"}), 500
 
 
-# --- 11. NEW Admin Endpoints ---
+# --- 13. NEW Admin Endpoints ---
 
 @app.route('/admin/stats', methods=['GET'])
 def get_admin_stats():
@@ -448,7 +632,8 @@ def get_admin_stats():
         total_unique_users = cursor_users.fetchone()[0]
         
         # 2. Today's Users
-        today_str = str(date.today())
+        # --- MODIFIED: Use IST Timezone ---
+        today_str = str(datetime.now(IST_TZ).date())
         cursor_users.execute("SELECT COUNT(id) FROM all_users WHERE last_seen LIKE ?", (today_str + '%',))
         today_users = cursor_users.fetchone()[0]
         conn_users.close()
@@ -662,7 +847,8 @@ def get_today_users():
     Fetches all users who were active today.
     """
     try:
-        today_str = str(date.today())
+        # --- MODIFIED: Use IST Timezone ---
+        today_str = str(datetime.now(IST_TZ).date())
         
         conn = sqlite3.connect(USERS_DB_PATH)
         conn.row_factory = sqlite3.Row
@@ -685,7 +871,7 @@ def get_today_users():
         return jsonify({"error": "An internal server error occurred"}), 500
 
 
-# --- 12. Run the Flask App ---
+# --- 14. Run the Flask App ---
 if __name__ == "__main__":
     print("\n--- BIT Chatbot Backend is Starting ---")
     print("Access the API at http://127.0.0.1:5000")

@@ -1,3 +1,6 @@
+source venv/bin/activate
+
+
 to start nginx (dont stop that if stop use this cmd):
 in -> bit-chatbot-new -> sudo systemctl start nginx
 

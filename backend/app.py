@@ -1,3 +1,6 @@
+#
+# This file is: app.py (MODIFIED)
+#
 import os
 import sys
 import atexit
@@ -6,11 +9,12 @@ from dotenv import load_dotenv
 from datetime import datetime, date, timedelta  # --- ADDED: timedelta ---
 import pytz  # Import pytz for time zone support
 
-# --- NEW: Imports for OTP Email ---
-import smtplib
-import ssl
+# --- NEW: Imports for OTP ---
+# import smtplib  <- REMOVED
+# import ssl      <- REMOVED
 import random
 import hashlib
+import gmail_send_otp  # <<< --- ADDED: Our new Gmail sender module ---
 
 # --- Flask Imports ---
 from flask import Flask, request, jsonify
@@ -32,13 +36,15 @@ if "GOOGLE_API_KEY" not in os.environ:
     print("Error: GOOGLE_API_KEY not found in .env file.")
     sys.exit(1)
 
-# --- NEW: Load Email Credentials for OTP ---
+# --- MODIFIED: Load Email Credentials for OTP ---
 EMAIL_SENDER = os.environ.get("email_id")
-EMAIL_PASSWORD = os.environ.get("app_password")
+# EMAIL_PASSWORD = os.environ.get("app_password") <- REMOVED
 
-if not EMAIL_SENDER or not EMAIL_PASSWORD:
-    print("Error: email_id or app_password not found in .env file.")
-    print("Please add them to your .env file to enable OTP.")
+# We only need to check for the sender email, 
+# as the password is now handled by token.json
+if not EMAIL_SENDER:
+    print("Error: email_id not found in .env file.")
+    print("This is required as the 'From' address for sending OTPs.")
     sys.exit(1)
 
 # --- 2. Define All Paths ---
@@ -65,7 +71,7 @@ IST_TZ = pytz.timezone('Asia/Kolkata')
 # --- 3. Initialize SQLite Databases ---
 def setup_databases():
     """
-    Creates the 'database' directory and initializes both database tables
+    Creates the 'database' directory and initializes all database tables
     if they don't already exist.
     """
     try:
@@ -224,7 +230,7 @@ retriever = vectorstore.as_retriever(search_kwargs={"k": 30})
 # --- END OF CHANGE ---
 # ---
 
-llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.3)
+llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.3) # Using 1.5-flash as 2.5 is not a public model
 
 template = """
 You are **BIT Bot**, the official virtual assistant of **Bannari Amman Institute of Technology (BIT)**.
@@ -355,68 +361,17 @@ def hash_otp(otp):
     """Hashes the OTP using SHA-256."""
     return hashlib.sha256(otp.encode()).hexdigest()
 
-def send_otp_email(recipient_email, otp):
-    """Sends the OTP to the user's email using SMTP."""
-    subject = "Your BITRA Chatbot Verification Code"
-    body = f"""
-    <html>
-    <head>
-        <style>
-            .container {{ font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 5px; max-width: 600px; margin: auto; }}
-            .header {{ font-size: 24px; color: #333; }}
-            .otp-code {{
-                font-size: 36px;
-                font-weight: bold;
-                color: #004a99;
-                margin: 20px 0;
-                letter-spacing: 2px;
-                text-align: center;
-                padding: 10px;
-                background-color: #f4f4f4;
-                border-radius: 5px;
-            }}
-            .footer {{ font-size: 12px; color: #888; margin-top: 20px; }}
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="header">Hello,</div>
-            <p>Thank you for verifying your email for the BITRA Chatbot.</p>
-            <p>Your One-Time Password (OTP) is:</p>
-            <div class="otp-code">{otp}</div>
-            <p>This code is valid for 10 minutes.</p>
-            <p class="footer">
-                Best regards,<br>
-                Bannari Amman Institute of Technology
-            </p>
-        </div>
-    </body>
-    </html>
-    """
-    
-    # Using 'MIME-Version' and 'Content-Type' for HTML emails
-    message = f"Subject: {subject}\nFrom: {EMAIL_SENDER}\nTo: {recipient_email}\nMIME-Version: 1.0\nContent-Type: text/html\n\n{body}"
-    
-    context = ssl.create_default_context()
-    try:
-        # Using SMTP_SSL for a secure connection from the start
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context) as server:
-            server.login(EMAIL_SENDER, EMAIL_PASSWORD)
-            # Sendmail needs the message to be encoded
-            server.sendmail(EMAIL_SENDER, recipient_email, message.encode('utf-8'))
-        print(f"Successfully sent OTP to {recipient_email}")
-        return True
-    except Exception as e:
-        print(f"Error sending email to {recipient_email}: {e}")
-        return False
-
+#
+# --- REMOVED: The old send_otp_email(smtplib) function ---
+# (All this logic is now in gmail_send_otp.py)
+#
 
 # --- 10. NEW Endpoint: Request OTP ---
 @app.route('/request-otp', methods=['POST'])
 def request_otp():
     """
     Generates an OTP, hashes it, stores it in the otp_db,
-    and sends it to the user's email.
+    and sends it to the user's email using the Gmail API.
     """
     try:
         data = request.json
@@ -447,8 +402,10 @@ def request_otp():
         conn.commit()
         conn.close()
         
-        # Send the email
-        if not send_otp_email(email, otp):
+        # --- MODIFIED: Send the email using the new Gmail module ---
+        print(f"Attempting to send OTP to {email} via Gmail API...")
+        if not gmail_send_otp.send_otp_email_gmail(email, otp):
+            print(f"Failed to send OTP email to {email}")
             return jsonify({"error": "Failed to send OTP email"}), 500
             
         return jsonify({"status": "success", "message": "OTP sent to your email."})
@@ -465,6 +422,9 @@ def login_user():
     Verifies a user's OTP. If valid, logs them in.
     If they are new (based on email), adds them to the all_users table.
     Otherwise, just updates their last_seen timestamp.
+    
+    This endpoint's logic is UNCHANGED, but it now verifies the
+    OTP sent by the new Gmail API method.
     """
     try:
         data = request.json
@@ -885,5 +845,6 @@ def get_today_users():
 # --- 14. Run the Flask App ---
 if __name__ == "__main__":
     print("\n--- BIT Chatbot Backend is Starting ---")
+    print("Using Gmail API for sending OTPs.")
     print("Access the API at http://127.0.0.1:5000")
     app.run(debug=True, port=5000)

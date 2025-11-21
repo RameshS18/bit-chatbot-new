@@ -84,7 +84,7 @@ const ChatbotPage = () => {
 
       setMessages([{
         type: 'bot',
-        text: `Hi ${userData.name}! 👋\n\nI'm BITRA, your virtual assistant for Bannari Amman Institute of Technology. I can help you with:\n\n• Admissions & Eligibility\n• Course Information\n• Campus Facilities\n• Placements & Internships\n• Hostel & Accommodation\n\nWhat would you like to know?`,
+        text: `Hi ${userData.name}! 👋\n\nI'm BIT AI Assistant, your virtual assistant for Bannari Amman Institute of Technology. I can help you with:\n\n• Admissions & Eligibility\n• Course Information\n• Campus Facilities\n• Placements & Internships\n• Hostel & Accommodation\n\nWhat would you like to know?`,
         timestamp: new Date()
       }]);
     }
@@ -414,7 +414,7 @@ useEffect(() => {
               <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-green-400 border-2 border-purple-900 rounded-full"></div>
             </div>
             <div>
-              <h1 className="text-lg font-bold text-white leading-tight">BITRA</h1>
+              <h1 className="text-lg font-bold text-white leading-tight">BIT AI Assistant</h1>
               <p className="text-xs text-purple-200 leading-tight flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse flex-shrink-0"></span>
                 <span>Online now</span>
@@ -557,7 +557,7 @@ useEffect(() => {
                 ) : (
                   <div className="bg-white border border-gray-100 px-5 py-3.5 rounded-2xl rounded-bl-md shadow-md">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-purple-700 animate-pulse-text">BITRA is thinking</span>
+                      <span className="text-sm font-medium text-purple-700 animate-pulse-text">BIT AI Assistant is thinking</span>
                       <div className="flex gap-1">
                         <span className="w-1.5 h-1.5 bg-purple-600 rounded-full animate-thinking1"></span>
                         <span className="w-1.5 h-1.5 bg-purple-600 rounded-full animate-thinking2"></span>
@@ -607,7 +607,7 @@ useEffect(() => {
                   onChange={handleInputChange}
                   onKeyDown={handleKeyPress}
                   onFocus={handleInputFocus}
-                  placeholder={isLoading ? "BITRA is typing..." : "Type your message..."}
+                  placeholder={isLoading ? "BIT AI Assistant is typing..." : "Type your message..."}
                   disabled={isLoading}
                   maxLength={500}
                   aria-label="Type your message"

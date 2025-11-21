@@ -1,10 +1,17 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { 
   Lock, Mail, LogOut, Users, MessageSquare, Clock, CheckSquare, 
-  X, Send, RotateCw, AlertCircle, ChevronRight, FileText
+  X, Send, RotateCw, AlertCircle, ChevronRight, FileText, Edit,
+  BookUser, // <-- NEW: Import icon
+  Search, Filter, Download, User as UserIcon, BookCopy // <-- NEW: Import icons
 } from 'lucide-react'
 import axios from 'axios'
+
+// --- NEW: Spinner Component ---
+const Spinner = ({ size = 'h-12 w-12', borderColor = 'border-blue-600' }) => (
+  <div className={`animate-spin rounded-full ${size} border-b-2 ${borderColor} mx-auto`}></div>
+)
 
 // --- User Queries Modal Component ---
 const UserQueriesModal = ({ user, onClose, onResolve, mode = 'escalated' }) => {
@@ -22,8 +29,6 @@ const UserQueriesModal = ({ user, onClose, onResolve, mode = 'escalated' }) => {
     try {
       const response = await axios.get(`/api/admin/user-queries/${encodeURIComponent(user.email)}`)
       
-      // --- THIS IS THE CRITICAL CHANGE ---
-      // Filter queries based on the mode
       let fetchedQueries = response.data
       if (isSolvedMode) {
         fetchedQueries = fetchedQueries.filter(q => q.status === 'Finished')
@@ -31,7 +36,6 @@ const UserQueriesModal = ({ user, onClose, onResolve, mode = 'escalated' }) => {
         fetchedQueries = fetchedQueries.filter(q => q.status === 'Initiated')
       }
       setQueries(fetchedQueries)
-      // --- END OF CHANGE ---
 
     } catch (error) {
       console.error('Error fetching user queries:', error)
@@ -62,7 +66,6 @@ const UserQueriesModal = ({ user, onClose, onResolve, mode = 'escalated' }) => {
     }
   }
 
-  // --- NEW: Dynamic constants based on mode ---
   const isSolvedMode = mode === 'solved'
   const headerGradient = isSolvedMode ? 'from-green-600 to-green-700' : 'from-red-600 to-red-700'
   const headerTitle = isSolvedMode ? 'Solved Queries' : 'Escalated Queries'
@@ -72,9 +75,9 @@ const UserQueriesModal = ({ user, onClose, onResolve, mode = 'escalated' }) => {
   const emptyText = isSolvedMode ? 'No solved queries found for this user' : 'No escalated queries found for this user'
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
-        {/* Header --- CHANGED: Dynamic Colors/Title --- */}
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-fade-in">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden animate-fade-in-up">
+        {/* Header */}
         <div className={`bg-gradient-to-r ${headerGradient} px-6 py-4 flex justify-between items-center`}>
           <div>
             <h3 className="text-2xl font-bold text-white">{headerTitle}</h3>
@@ -92,10 +95,9 @@ const UserQueriesModal = ({ user, onClose, onResolve, mode = 'escalated' }) => {
         <div className="p-6 overflow-y-auto max-h-[calc(90vh-100px)]">
           {loading ? (
             <div className="text-center py-12">
-              <div className={`animate-spin rounded-full h-12 w-12 border-b-2 ${isSolvedMode ? 'border-green-600' : 'border-red-600'} mx-auto`}></div>
+              <Spinner borderColor={isSolvedMode ? 'border-green-600' : 'border-red-600'} />
               <p className="text-gray-600 mt-4">Loading queries...</p>
             </div>
-            // --- CHANGED: Dynamic Empty State ---
           ) : queries.length === 0 ? (
             <div className="text-center py-12">
               {emptyIcon}
@@ -106,7 +108,6 @@ const UserQueriesModal = ({ user, onClose, onResolve, mode = 'escalated' }) => {
               {queries.map((query) => (
                 <div 
                   key={query.id} 
-                  // --- CHANGED: Dynamic Border Color ---
                   className={`bg-gray-50 rounded-lg p-5 hover:shadow-md transition-shadow border-l-4 ${borderColor}`}
                 >
                   <div className="flex justify-between items-start mb-3">
@@ -133,7 +134,6 @@ const UserQueriesModal = ({ user, onClose, onResolve, mode = 'escalated' }) => {
                     </span>
                   </div>
                   
-                  {/* --- CHANGED: Hide Resolve button in solved mode --- */}
                   {!isSolvedMode && query.status === 'Initiated' && selectedQuery?.id !== query.id && (
                     <button
                       onClick={() => setSelectedQuery(query)}
@@ -143,7 +143,6 @@ const UserQueriesModal = ({ user, onClose, onResolve, mode = 'escalated' }) => {
                     </button>
                   )}
 
-                  {/* --- CHANGED: Hide Resolve form in solved mode --- */}
                   {!isSolvedMode && selectedQuery?.id === query.id && (
                     <div className="mt-4 bg-white rounded-lg p-4 border-2 border-red-200">
                       <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -190,8 +189,8 @@ const UserQueriesModal = ({ user, onClose, onResolve, mode = 'escalated' }) => {
 // --- User Details Modal Component ---
 const UserDetailsModal = ({ user, onClose }) => {
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl">
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-fade-in">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl animate-fade-in-up">
         {/* Header */}
         <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 flex justify-between items-center">
           <h3 className="text-2xl font-bold text-white">User Details</h3>
@@ -215,7 +214,6 @@ const UserDetailsModal = ({ user, onClose }) => {
                 <p className="text-gray-600">User ID: #{user.id}</p>
               </div>
             </div>
-
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="bg-gray-50 rounded-lg p-4">
                 <p className="text-sm font-semibold text-gray-600 mb-1">Email Address</p>
@@ -224,19 +222,16 @@ const UserDetailsModal = ({ user, onClose }) => {
                   {user.email}
                 </p>
               </div>
-
               <div className="bg-gray-50 rounded-lg p-4">
                 <p className="text-sm font-semibold text-gray-600 mb-1">Phone Number</p>
                 <p className="text-gray-800">
                   {user.phone_number || <span className="text-gray-400 italic">Not provided</span>}
                 </p>
               </div>
-
               <div className="bg-gray-50 rounded-lg p-4">
                 <p className="text-sm font-semibold text-gray-600 mb-1">First Seen</p>
                 <p className="text-gray-800">{new Date(user.first_seen).toLocaleString()}</p>
               </div>
-
               <div className="bg-gray-50 rounded-lg p-4">
                 <p className="text-sm font-semibold text-gray-600 mb-1">Last Seen</p>
                 <p className="text-gray-800">{new Date(user.last_seen).toLocaleString()}</p>
@@ -281,8 +276,8 @@ const EscalatedUsersModal = ({ onClose, onUserSelect, onRefresh }) => {
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden">
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-fade-in">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden animate-fade-in-up">
         {/* Header */}
         <div className="bg-gradient-to-r from-red-600 to-red-700 px-6 py-4 flex justify-between items-center">
           <h3 className="text-2xl font-bold text-white">Users with Escalated Queries</h3>
@@ -298,7 +293,7 @@ const EscalatedUsersModal = ({ onClose, onUserSelect, onRefresh }) => {
         <div className="p-6 overflow-y-auto max-h-[calc(90vh-100px)]">
           {loading ? (
             <div className="text-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto"></div>
+              <Spinner borderColor="border-red-600" />
               <p className="text-gray-600 mt-4">Loading users...</p>
             </div>
           ) : users.length === 0 ? (
@@ -345,7 +340,7 @@ const EscalatedUsersModal = ({ onClose, onUserSelect, onRefresh }) => {
   )
 }
 
-// --- NEW Solved Users List Modal ---
+// --- Solved Users List Modal ---
 const SolvedUsersModal = ({ onClose, onUserSelect, onRefresh }) => {
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
@@ -367,9 +362,9 @@ const SolvedUsersModal = ({ onClose, onUserSelect, onRefresh }) => {
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden">
-        {/* Header --- Styled Green --- */}
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-fade-in">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden animate-fade-in-up">
+        {/* Header */}
         <div className="bg-gradient-to-r from-green-600 to-green-700 px-6 py-4 flex justify-between items-center">
           <h3 className="text-2xl font-bold text-white">Users with Solved Queries</h3>
           <button
@@ -384,8 +379,7 @@ const SolvedUsersModal = ({ onClose, onUserSelect, onRefresh }) => {
         <div className="p-6 overflow-y-auto max-h-[calc(90vh-100px)]">
           {loading ? (
             <div className="text-center py-12">
-              {/* --- Styled Green --- */}
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto"></div>
+              <Spinner borderColor="border-green-600" />
               <p className="text-gray-600 mt-4">Loading users...</p>
             </div>
           ) : users.length === 0 ? (
@@ -402,7 +396,6 @@ const SolvedUsersModal = ({ onClose, onUserSelect, onRefresh }) => {
                     onUserSelect(user)
                     onClose()
                   }}
-                  // --- Styled Green ---
                   className="bg-gray-50 hover:bg-green-50 rounded-lg p-4 cursor-pointer transition-all border-l-4 border-green-500 hover:shadow-md group"
                 >
                   <div className="flex justify-between items-center">
@@ -417,7 +410,6 @@ const SolvedUsersModal = ({ onClose, onUserSelect, onRefresh }) => {
                     </div>
                     <div className="flex items-center space-x-4">
                       <div className="text-right">
-                        {/* --- Styled Green --- */}
                         <p className="text-2xl font-bold text-green-600">{user.query_count}</p>
                         <p className="text-xs text-gray-500">Solved</p>
                       </div>
@@ -433,7 +425,6 @@ const SolvedUsersModal = ({ onClose, onUserSelect, onRefresh }) => {
     </div>
   )
 }
-
 
 // --- Today's Users Modal ---
 const TodayUsersModal = ({ onClose }) => {
@@ -466,8 +457,8 @@ const TodayUsersModal = ({ onClose }) => {
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden">
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-fade-in">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden animate-fade-in-up">
         {/* Header */}
         <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 flex justify-between items-center">
           <h3 className="text-2xl font-bold text-white">Today's Active Users</h3>
@@ -483,7 +474,7 @@ const TodayUsersModal = ({ onClose }) => {
         <div className="p-6 overflow-y-auto max-h-[calc(90vh-100px)]">
           {loading ? (
             <div className="text-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+              <Spinner borderColor="border-blue-600" />
               <p className="text-gray-600 mt-4">Loading users...</p>
             </div>
           ) : users.length === 0 ? (
@@ -552,8 +543,8 @@ const AllUsersModal = ({ onClose }) => {
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden">
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-fade-in">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden animate-fade-in-up">
         {/* Header */}
         <div className="bg-gradient-to-r from-purple-600 to-purple-700 px-6 py-4 flex justify-between items-center">
           <h3 className="text-2xl font-bold text-white">All Registered Users</h3>
@@ -569,7 +560,7 @@ const AllUsersModal = ({ onClose }) => {
         <div className="p-6 overflow-y-auto max-h-[calc(90vh-100px)]">
           {loading ? (
             <div className="text-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto"></div>
+              <Spinner borderColor="border-purple-600" />
               <p className="text-gray-600 mt-4">Loading users...</p>
             </div>
           ) : users.length === 0 ? (
@@ -607,6 +598,230 @@ const AllUsersModal = ({ onClose }) => {
   )
 }
 
+// --- NEW: Editor Details Modal ---
+const EditorDetailsModal = ({ onClose }) => {
+  const [view, setView] = useState('logs') // 'logs' or 'staff'
+  const [logs, setLogs] = useState([])
+  const [staff, setStaff] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [filter, setFilter] = useState('all') // 'all', '10days', '30days'
+
+  // Fetch both logs and staff on mount
+  useEffect(() => {
+    fetchEditorLogs()
+    fetchEditorStaff()
+  }, [])
+  
+  // Refetch logs when filters change
+  useEffect(() => {
+    fetchEditorLogs()
+  }, [searchTerm, filter])
+
+  const fetchEditorLogs = async () => {
+    setLoading(true)
+    try {
+      const response = await axios.get('/api/admin/editor-logs', {
+        params: {
+          search: searchTerm,
+          filter: filter
+        }
+      })
+      setLogs(response.data)
+    } catch (error) {
+      console.error('Error fetching editor logs:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const fetchEditorStaff = async () => {
+    try {
+      const response = await axios.get('/api/admin/editor-staff')
+      setStaff(response.data)
+    } catch (error) {
+      console.error('Error fetching editor staff:', error)
+    }
+  }
+  
+  // Client-side filtering for staff list
+  const filteredStaff = useMemo(() => {
+    return staff.filter(s => 
+      s.staff_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      s.staff_id.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+  }, [staff, searchTerm])
+
+  const handleDownload = () => {
+    // Open a new window to trigger the download
+    window.open(`/api/admin/download-editor-logs?search=${encodeURIComponent(searchTerm)}&filter=${filter}`)
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-fade-in">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden animate-fade-in-up">
+        {/* Header */}
+        <div className="bg-gradient-to-r from-teal-600 to-teal-700 px-6 py-4 flex justify-between items-center">
+          <h3 className="text-2xl font-bold text-white">Editor Details</h3>
+          <button
+            onClick={onClose}
+            className="text-white hover:bg-white/20 rounded-full p-2 transition-colors"
+          >
+            <X size={24} />
+          </button>
+        </div>
+        
+        {/* Tabs */}
+        <div className="flex border-b border-gray-200">
+          <button
+            onClick={() => setView('logs')}
+            className={`flex-1 py-4 px-6 text-center font-semibold flex items-center justify-center space-x-2 transition-colors ${
+              view === 'logs'
+                ? 'border-b-4 border-teal-600 text-teal-600'
+                : 'text-gray-500 hover:bg-gray-100'
+            }`}
+          >
+            <BookCopy size={18} />
+            <span>Edit Logs</span>
+          </button>
+          <button
+            onClick={() => setView('staff')}
+            className={`flex-1 py-4 px-6 text-center font-semibold flex items-center justify-center space-x-2 transition-colors ${
+              view === 'staff'
+                ? 'border-b-4 border-teal-600 text-teal-600'
+                : 'text-gray-500 hover:bg-gray-100'
+            }`}
+          >
+            <UserIcon size={18} />
+            <span>Staff Members</span>
+          </button>
+        </div>
+        
+        {/* Toolbar */}
+        <div className="p-4 bg-gray-50 border-b border-gray-200 flex flex-col md:flex-row md:items-center space-y-3 md:space-y-0 md:space-x-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-3 text-gray-400" size={18} />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search by Staff ID or Name..."
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none"
+            />
+          </div>
+          <div className="relative">
+            <Filter className="absolute left-3 top-3 text-gray-400" size={18} />
+            <select
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              disabled={view === 'staff'}
+              className="w-full md:w-auto pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none appearance-none disabled:opacity-50"
+            >
+              <option value="all">All Time</option>
+              <option value="10days">Last 10 Days</option>
+              <option value="30days">Last 30 Days</option>
+            </select>
+          </div>
+          <button
+            onClick={handleDownload}
+            disabled={view === 'staff'}
+            className="flex items-center justify-center space-x-2 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors disabled:opacity-50"
+          >
+            <Download size={18} />
+            <span>Download Logs</span>
+          </button>
+        </div>
+
+        {/* Content Area */}
+        <div className="flex-1 overflow-y-auto">
+          {loading ? (
+            <div className="text-center py-20">
+              <Spinner borderColor="border-teal-600" />
+              <p className="text-gray-600 mt-4">Loading data...</p>
+            </div>
+          ) : view === 'logs' ? (
+            // --- LOGS VIEW ---
+            <div className="overflow-x-auto">
+              {logs.length === 0 ? (
+                <div className="text-center py-20 text-gray-500">
+                  <BookCopy size={48} className="mx-auto mb-4" />
+                  No logs found for this filter.
+                </div>
+              ) : (
+                <table className="w-full text-sm text-left text-gray-700">
+                  <thead className="text-xs text-gray-600 uppercase bg-gray-100 sticky top-0">
+                    <tr>
+                      <th scope="col" className="px-6 py-3">Timestamp</th>
+                      <th scope="col" className="px-6 py-3">Staff ID</th>
+                      <th scope="col" className="px-6 py-3">Staff Name</th>
+                      <th scope="col" className="px-6 py-3">Action</th>
+                      <th scope="col" className="px-6 py-3">Document</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {logs.map(log => (
+                      <tr key={log.log_id} className="bg-white border-b hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap">{new Date(log.timestamp).toLocaleString()}</td>
+                        <td className="px-6 py-4 font-medium">{log.staff_id}</td>
+                        <td className="px-6 py-4">{log.staff_name || <span className="text-gray-400 italic">Unknown</span>}</td>
+                        <td className="px-6 py-4">
+                           <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                             log.action_performed === 'Document Added' ? 'bg-green-100 text-green-800' :
+                             log.action_performed === 'Document Edited' ? 'bg-yellow-100 text-yellow-800' :
+                             log.action_performed === 'File Uploaded' ? 'bg-blue-100 text-blue-800' :
+                             log.action_performed === 'Document Deleted' ? 'bg-red-100 text-red-800' :
+                             'bg-purple-100 text-purple-800'
+                           }`}>
+                            {log.action_performed}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">{log.document_name}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          ) : (
+            // --- STAFF VIEW ---
+            <div className="overflow-x-auto">
+               {filteredStaff.length === 0 ? (
+                <div className="text-center py-20 text-gray-500">
+                  <UserIcon size={48} className="mx-auto mb-4" />
+                  No staff members found.
+                </div>
+              ) : (
+                <table className="w-full text-sm text-left text-gray-700">
+                  <thead className="text-xs text-gray-600 uppercase bg-gray-100 sticky top-0">
+                    <tr>
+                      <th scope="col" className="px-6 py-3">Staff ID</th>
+                      <th scope="col" className="px-6 py-3">Staff Name</th>
+                      <th scope="col" className="px-6 py-3">Last Login</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredStaff.map(s => (
+                      <tr key={s.staff_id} className="bg-white border-b hover:bg-gray-50">
+                        <td className="px-6 py-4 font-medium">{s.staff_id}</td>
+                        <td className="px-6 py-4">{s.staff_name}</td>
+                        <td className="px-6 py-4">
+                          {s.last_login ? new Date(s.last_login).toLocaleString() : <span className="text-gray-400 italic">Never</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+// --- END: Editor Details Modal ---
+
+
 // --- Main Admin Page Component ---
 const AdminPage = () => {
   const navigate = useNavigate()
@@ -627,14 +842,34 @@ const AdminPage = () => {
   const [showEscalatedModal, setShowEscalatedModal] = useState(false)
   const [showTodayUsersModal, setShowTodayUsersModal] = useState(false)
   const [showAllUsersModal, setShowAllUsersModal] = useState(false)
-  // --- CHANGED: Renamed state ---
   const [showSolvedUsersModal, setShowSolvedUsersModal] = useState(false)
   const [showUserQueriesModal, setShowUserQueriesModal] = useState(false)
+  const [showEditorDetailsModal, setShowEditorDetailsModal] = useState(false) // <-- NEW
   const [selectedUser, setSelectedUser] = useState(null)
-  // --- NEW: Added state for modal mode ---
   const [modalMode, setModalMode] = useState('escalated')
 
   useEffect(() => {
+    // Add animation styles to the head
+    const style = document.createElement('style')
+    style.innerHTML = `
+      @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      @keyframes fadeInUp {
+        from { opacity: 0; transform: translate3d(0, 30px, 0); }
+        to { opacity: 1; transform: translate3d(0, 0, 0); }
+      }
+      .animate-fade-in {
+        animation: fadeIn 0.2s ease-out;
+      }
+      .animate-fade-in-up {
+        animation: fadeInUp 0.3s ease-out;
+      }
+    `
+    document.head.appendChild(style)
+    
+    // Check auth
     const adminAuth = localStorage.getItem('bitChatbotAdmin')
     if (adminAuth === 'true') {
       setIsAuthenticated(true)
@@ -672,7 +907,6 @@ const AdminPage = () => {
     navigate('/')
   }
 
-  // --- CHANGED: Updated to accept and set mode ---
   const handleUserSelect = (user, mode = 'escalated') => {
     setSelectedUser(user)
     setModalMode(mode) 
@@ -753,7 +987,6 @@ const AdminPage = () => {
       {showEscalatedModal && (
         <EscalatedUsersModal 
           onClose={() => setShowEscalatedModal(false)}
-          // --- CHANGED: Explicitly pass 'escalated' mode ---
           onUserSelect={(user) => handleUserSelect(user, 'escalated')}
           onRefresh={fetchStats}
         />
@@ -767,7 +1000,6 @@ const AdminPage = () => {
             setSelectedUser(null)
           }}
           onResolve={fetchStats}
-          // --- NEW: Pass the mode to the modal ---
           mode={modalMode} 
         />
       )}
@@ -780,14 +1012,17 @@ const AdminPage = () => {
         <AllUsersModal onClose={() => setShowAllUsersModal(false)} />
       )}
 
-      {/* --- CHANGED: Replaced old modal with new one --- */}
       {showSolvedUsersModal && (
         <SolvedUsersModal 
           onClose={() => setShowSolvedUsersModal(false)}
-          // --- CHANGED: Explicitly pass 'solved' mode ---
           onUserSelect={(user) => handleUserSelect(user, 'solved')}
           onRefresh={fetchStats}
         />
+      )}
+      
+      {/* --- NEW: Editor Details Modal --- */}
+      {showEditorDetailsModal && (
+        <EditorDetailsModal onClose={() => setShowEditorDetailsModal(false)} />
       )}
 
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
@@ -805,6 +1040,13 @@ const AdminPage = () => {
             </div>
             
             <div className="flex items-center space-x-4">
+              <button
+                onClick={() => navigate('/editor')}
+                className="flex items-center space-x-2 bg-yellow-500 hover:bg-yellow-600 px-4 py-2 rounded-lg transition-colors"
+              >
+                <Edit size={18} />
+                <span className="hidden sm:inline">Document Editor</span>
+              </button>
               <button
                 onClick={fetchStats}
                 disabled={loading}
@@ -826,7 +1068,7 @@ const AdminPage = () => {
 
         <div className="container mx-auto px-4 py-8">
           {/* Stats Cards - Row 1 */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
             {/* Escalated Queries Card */}
             <div 
               onClick={() => setShowEscalatedModal(true)}
@@ -866,10 +1108,7 @@ const AdminPage = () => {
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* Stats Cards - Row 2 */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Total Users Card */}
             <div 
               onClick={() => setShowAllUsersModal(true)}
@@ -889,9 +1128,11 @@ const AdminPage = () => {
                 </div>
               </div>
             </div>
+          </div>
 
+          {/* Stats Cards - Row 2 (with new card) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {/* Solved Queries Card */}
-            {/* --- CHANGED: Updated onClick handler --- */}
             <div 
               onClick={() => setShowSolvedUsersModal(true)}
               className="bg-gradient-to-br from-green-500 to-green-600 rounded-2xl shadow-xl p-8 cursor-pointer transform transition-all hover:scale-105 hover:shadow-2xl text-white"
@@ -910,6 +1151,30 @@ const AdminPage = () => {
                 </div>
               </div>
             </div>
+            
+            {/* --- NEW: Editor Details Card --- */}
+            <div 
+              onClick={() => setShowEditorDetailsModal(true)}
+              className="bg-gradient-to-br from-teal-500 to-teal-600 rounded-2xl shadow-xl p-8 cursor-pointer transform transition-all hover:scale-105 hover:shadow-2xl text-white"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-teal-100 mb-2 font-medium">Editor Details</p>
+                  <p className="text-3xl font-bold mb-2">Logs & Staff</p>
+                  <p className="text-teal-100 text-sm flex items-center">
+                    <BookUser size={16} className="mr-1" />
+                    Click to view details
+                  </p>
+                </div>
+                <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
+                  <BookUser size={40} />
+                </div>
+              </div>
+            </div>
+            
+            {/* This empty div helps center the two cards on lg screens if you have 5 items */}
+            <div className="hidden lg:block"></div>
+            
           </div>
 
           {/* Info Card */}
@@ -936,6 +1201,10 @@ const AdminPage = () => {
                   <li className="flex items-start">
                     <span className="text-green-500 mr-2">•</span>
                     <span><strong>Solved Queries:</strong> View all queries that have been resolved with remarks.</span>
+                  </li>
+                   <li className="flex items-start">
+                    <span className="text-teal-500 mr-2">•</span>
+                    <span><strong>Editor Details:</strong> View all document edit logs and a list of registered staff members.</span>
                   </li>
                 </ul>
               </div>

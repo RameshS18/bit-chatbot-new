@@ -357,7 +357,7 @@ const LandingPage = () => {
         <div className="fixed inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 z-50">
           <img 
             src={botIconUrl} 
-            alt="BITRA Logo" 
+            alt="BIT AI Assistant Logo" 
             className="h-20 w-20 sm:h-24 sm:w-24 rounded-full mb-6"
           />
           <div 
@@ -369,7 +369,7 @@ const LandingPage = () => {
               WebkitTextFillColor: 'transparent'
             }}
           >
-            BITRA
+            BIT AI Assistant
           </div>
         </div>
       )}
@@ -379,7 +379,7 @@ const LandingPage = () => {
           <header className="fixed top-0 left-0 right-0 h-16 sm:h-20 bg-slate-900/95 border-b border-indigo-500/20 z-50 shadow-lg backdrop-blur-sm">
             <div className="h-full px-4 sm:px-8 flex items-center justify-between max-w-7xl mx-auto">
               <div className="flex items-center gap-2 sm:gap-3">
-                <img src={botIconUrl} alt="BITRA Logo" className="h-8 w-8 sm:h-10 sm:w-10 rounded-full" />
+                <img src={botIconUrl} alt="BIT AI Assistant Logo" className="h-8 w-8 sm:h-10 sm:w-10 rounded-full" />
                 <div 
                   className="text-2xl sm:text-3xl font-black text-white"
                   style={{
@@ -389,7 +389,7 @@ const LandingPage = () => {
                     WebkitTextFillColor: 'transparent'
                   }}
                 >
-                  BITRA
+                  BIT AI Assistant
                 </div>
               </div>
             </div>
@@ -474,7 +474,7 @@ const LandingPage = () => {
           <header className="fixed top-0 left-0 right-0 h-16 sm:h-20 bg-slate-900/95 border-b border-indigo-500/20 z-50 shadow-lg backdrop-blur-sm">
             <div className="h-full px-4 sm:px-8 flex items-center justify-between max-w-7xl mx-auto">
               <div className="flex items-center gap-2 sm:gap-3">
-                <img src={botIconUrl} alt="BITRA Logo" className="h-8 w-8 sm:h-10 sm:w-10 rounded-full" />
+                <img src={botIconUrl} alt="BIT AI Assistant Logo" className="h-8 w-8 sm:h-10 sm:w-10 rounded-full" />
                 <div 
                   className="text-2xl sm:text-3xl font-black text-white"
                   style={{
@@ -484,7 +484,7 @@ const LandingPage = () => {
                     WebkitTextFillColor: 'transparent'
                   }}
                 >
-                  BITRA
+                  BIT AI Assistant
                 </div>
               </div>
               <button
@@ -501,7 +501,7 @@ const LandingPage = () => {
               
               <div className="text-center mb-8 sm:mb-12">
                 <h1 className="text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-black mb-3 sm:mb-4 text-white px-2">
-                  Welcome to BITRA
+                  Welcome to BIT AI Assistant
                 </h1>
                 <h2 
                   className="text-lg sm:text-xl lg:text-2xl xl:text-3xl font-semibold text-white mb-8 sm:mb-12 px-2"

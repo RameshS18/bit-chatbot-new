@@ -1,5 +1,5 @@
 #
-# This file is: app.py (FULL CODE - FINAL VERSION)
+# This file is: app.py (FULL CODE - INTEGRATED SMART ROUTING & GMAIL)
 #
 import os
 import sys
@@ -11,20 +11,19 @@ from datetime import datetime, date, timedelta
 import pytz
 import random
 import hashlib
-import gmail_send_otp
+import gmail_send_otp # Existing OTP sender
+
+# --- NEW IMPORTS FOR LOGIC ---
+from query_classifier import classify_user_query # Your Brain
+from query_official_sender import send_escalation_email_gmail # Your New Gmail Sender
 
 # --- NEW IMPORTS FOR READING DOCX/PDF ---
-import docx  # From python-docx
-import pypdf # From pypdf
-# --- END NEW IMPORTS ---
+import docx
+import pypdf
 
-# --- FLASK IMPORTS (with send_from_directory) ---
 from flask import Flask, request, jsonify, send_from_directory, make_response
-
-# --- CSV IMPORTS (for log download) ---
 import io
 import csv
-
 from flask_cors import CORS
 
 from langchain_community.document_loaders import DirectoryLoader
@@ -44,7 +43,6 @@ if "GOOGLE_API_KEY" not in os.environ:
 EMAIL_SENDER = os.environ.get("email_id")
 if not EMAIL_SENDER:
     print("Error: email_id not found in .env file.")
-    print("This is required as the 'From' address for sending OTPs.")
     sys.exit(1)
 
 # --- 2. Define All Paths ---
@@ -56,17 +54,16 @@ DATABASE_DIR = os.path.join(BASE_DIR, "database")
 ESCALATED_DB_PATH = os.path.join(DATABASE_DIR, "user_details.db")
 USERS_DB_PATH = os.path.join(DATABASE_DIR, "all_users.db")
 OTP_DB_PATH = os.path.join(DATABASE_DIR, "otp.db")
-# --- RENAMED: DB for Editor ---
 EDITOR_STAFF_DB_PATH = os.path.join(DATABASE_DIR, "editor_staff.db")
 EDIT_LOGS_DB_PATH = os.path.join(DATABASE_DIR, "edit_logs.db")
+ALL_CHATS_DB_PATH = os.path.join(DATABASE_DIR, "all_chats.db")
 
 IST_TZ = pytz.timezone('Asia/Kolkata')
 
 # --- 3. Initialize SQLite Databases ---
 def setup_databases():
     """
-    Creates the 'database' directory and initializes all database tables
-    if they don't already exist.
+    Creates DBs and performs migration to add 'category' column if missing.
     """
     try:
         os.makedirs(DATABASE_DIR, exist_ok=True)
@@ -85,12 +82,18 @@ def setup_databases():
             query_text TEXT NOT NULL,
             bot_response TEXT NOT NULL,
             status TEXT NOT NULL,
-            remarks TEXT
+            remarks TEXT,
+            category TEXT
         )
         """)
+        # MIGRATION: Add category column if strictly needed for old DBs
+        try:
+            cursor_details.execute("ALTER TABLE escalated_queries ADD COLUMN category TEXT")
+            print("Migrated escalated_queries: Added 'category' column.")
+        except sqlite3.OperationalError:
+            pass # Column likely exists
         conn_details.commit()
         conn_details.close()
-        print(f"Escalated queries database initialized: {ESCALATED_DB_PATH}")
 
         # --- DB 2: All User Stats ---
         conn_users = sqlite3.connect(USERS_DB_PATH)
@@ -107,7 +110,6 @@ def setup_databases():
         """)
         conn_users.commit()
         conn_users.close()
-        print(f"All users database initialized: {USERS_DB_PATH}")
 
         # --- DB 3: OTP Requests ---
         conn_otp = sqlite3.connect(OTP_DB_PATH)
@@ -122,13 +124,10 @@ def setup_databases():
         """)
         conn_otp.commit()
         conn_otp.close()
-        print(f"OTP database initialized: {OTP_DB_PATH}")
 
-        # --- DB 4: Editor Staff DB (File Renamed) ---
+        # --- DB 4: Editor Staff ---
         conn_staff = sqlite3.connect(EDITOR_STAFF_DB_PATH)
         cursor_staff = conn_staff.cursor()
-        
-        # Table 1: Staff Members
         cursor_staff.execute("""
         CREATE TABLE IF NOT EXISTS staff_members (
             staff_id TEXT PRIMARY KEY,
@@ -138,12 +137,8 @@ def setup_databases():
         try:
             cursor_staff.execute("INSERT INTO staff_members (staff_id, staff_name) VALUES (?, ?)", 
                                  ('BIT-STAFF-101', 'Dr. S. Ramesh'))
-            conn_staff.commit()
-            print("Default staff member 'BIT-STAFF-101' added.")
         except sqlite3.IntegrityError:
-            print("Default staff member already exists.")
-            
-        # --- NEW: Table 2: Session Logs (with timestamps) ---
+            pass
         cursor_staff.execute("""
         CREATE TABLE IF NOT EXISTS session_logs (
             session_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -153,12 +148,8 @@ def setup_databases():
             FOREIGN KEY (staff_id) REFERENCES staff_members(staff_id)
         )
         """)
-        print("Editor session logs table initialized.")
-        # --- END NEW ---
-        
         conn_staff.commit()
         conn_staff.close()
-        print(f"Editor staff database initialized: {EDITOR_STAFF_DB_PATH}")
 
         # --- DB 5: Edit Logs ---
         conn_logs = sqlite3.connect(EDIT_LOGS_DB_PATH)
@@ -175,8 +166,32 @@ def setup_databases():
         """)
         conn_logs.commit()
         conn_logs.close()
-        print(f"Edit logs database initialized: {EDIT_LOGS_DB_PATH}")
 
+        # --- DB 6: All Chat History ---
+        conn_chats = sqlite3.connect(ALL_CHATS_DB_PATH)
+        cursor_chats = conn_chats.cursor()
+        cursor_chats.execute("""
+        CREATE TABLE IF NOT EXISTS chat_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT NOT NULL,
+            user_name TEXT,
+            email TEXT,
+            phone_number TEXT,
+            user_query TEXT,
+            bot_response TEXT,
+            category TEXT
+        )
+        """)
+        # MIGRATION: Add category column
+        try:
+            cursor_chats.execute("ALTER TABLE chat_history ADD COLUMN category TEXT")
+            print("Migrated chat_history: Added 'category' column.")
+        except sqlite3.OperationalError:
+            pass 
+        conn_chats.commit()
+        conn_chats.close()
+
+        print("All databases initialized successfully.")
     except Exception as e:
         print(f"Error initializing SQLite databases: {e}")
         sys.exit(1)
@@ -184,99 +199,56 @@ def setup_databases():
 setup_databases()
 
 # --- 4. Initialize Google Embedding Model ---
-print("Initializing Google Generative AI Embedding model (uses API)...")
 try:
     embedding_model = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
-    print("Google Embedding model (API) is ready.")
 except Exception as e:
     print(f"Error initializing Google embedding model: {e}")
     sys.exit(1)
 
-# --- 5. Setup the Vector Database (FAISS) ---
+# --- 5. Setup FAISS ---
 vectorstore = None
 retriever = None
 
 def create_new_faiss_index():
     print("Creating new FAISS index...")
-    print(f"Loading documents from: {DOCUMENTS_PATH}")
-    
-    loader = DirectoryLoader(
-        DOCUMENTS_PATH,
-        glob="**/*.*",
-        show_progress=True,
-        use_multithreading=True,
-        silent_errors=True
-    )
+    loader = DirectoryLoader(DOCUMENTS_PATH, glob="**/*.*", show_progress=True, use_multithreading=True, silent_errors=True)
     documents = loader.load()
-
     if not documents:
-        print(f"No documents found in {DOCUMENTS_PATH}. Creating an empty index.")
         from langchain_core.documents import Document
         documents = [Document(page_content="No documents found.", metadata={"source": "dummy"})]
-        print("Added a dummy document to create empty index.")
-
-    print(f"Successfully loaded {len(documents)} documents.")
-
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=300)
     texts = text_splitter.split_documents(documents)
-    print(f"Split documents into {len(texts)} chunks.")
-
-    print("Creating FAISS vector store... (This will call the Google API)")
-    new_vectorstore = FAISS.from_documents(
-        documents=texts,
-        embedding=embedding_model
-    )
-    print(f"Saving FAISS index to: {FAISS_INDEX_PATH}")
+    new_vectorstore = FAISS.from_documents(documents=texts, embedding=embedding_model)
     new_vectorstore.save_local(FAISS_INDEX_PATH)
-    print("FAISS index created and saved successfully.")
     return new_vectorstore
 
 def load_or_rebuild_index():
     global vectorstore, retriever
-    print("Setting up the RAG chain...")
-    
     if os.path.exists(FAISS_INDEX_PATH):
-        print(f"Loading existing FAISS index from: {FAISS_INDEX_PATH}")
         try:
-            vectorstore = FAISS.load_local(
-                FAISS_INDEX_PATH,
-                embedding_model,
-                allow_dangerous_deserialization=True
-            )
-            print("FAISS index loaded successfully.")
-        except Exception as e:
-            print(f"Error loading FAISS index: {e}. Re-creating...")
+            vectorstore = FAISS.load_local(FAISS_INDEX_PATH, embedding_model, allow_dangerous_deserialization=True)
+        except Exception:
             vectorstore = create_new_faiss_index()
     else:
         vectorstore = create_new_faiss_index()
-    
     retriever = vectorstore.as_retriever(search_kwargs={"k": 30})
-    print("Retriever is ready.")
 
 def trigger_index_rebuild():
     global vectorstore, retriever
-    print("--- TRIGGERING RAG INDEX REBUILD ---")
-    
     if os.path.exists(FAISS_INDEX_PATH):
         try:
             shutil.rmtree(FAISS_INDEX_PATH)
-            print(f"Deleted old index: {FAISS_INDEX_PATH}")
-        except Exception as e:
-            print(f"Error deleting old index: {e}")
+        except Exception:
             return False
-            
     try:
-        new_vectorstore = create_new_faiss_index()
-        vectorstore = new_vectorstore
+        vectorstore = create_new_faiss_index()
         retriever = vectorstore.as_retriever(search_kwargs={"k": 30})
         update_rag_chain()
-        print("--- RAG INDEX REBUILD COMPLETE ---")
         return True
-    except Exception as e:
-        print(f"Error rebuilding index: {e}")
+    except Exception:
         return False
 
-# --- 6. Initialize the RAG Chain ---
+# --- 6. Initialize RAG Chain ---
 llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.5)
 template = """
 You are **BIT AI Assistant**, the official virtual assistant of **Bannari Amman Institute of Technology (BIT)**.
@@ -349,7 +321,6 @@ rag_chain = (
     | llm
     | StrOutputParser()
 )
-print("RAG chain is ready.")
 
 def update_rag_chain():
     global rag_chain
@@ -359,12 +330,9 @@ def update_rag_chain():
         | llm
         | StrOutputParser()
     )
-    print("RAG chain has been updated with new retriever.")
 
-# --- 7. Create Flask App ---
 app = Flask(__name__)
 CORS(app)
-print("Flask app created with CORS enabled.")
 
 # --- 8. Helper Functions ---
 def update_user_last_seen(email):
@@ -372,15 +340,11 @@ def update_user_last_seen(email):
         timestamp = datetime.now(IST_TZ).isoformat()
         conn = sqlite3.connect(USERS_DB_PATH)
         cursor = conn.cursor()
-        cursor.execute(
-            "UPDATE all_users SET last_seen = ? WHERE email = ?",
-            (timestamp, email)
-        )
+        cursor.execute("UPDATE all_users SET last_seen = ? WHERE email = ?", (timestamp, email))
         conn.commit()
         conn.close()
-        print(f"Updated last_seen for user: {email}")
-    except Exception as e:
-        print(f"Error updating last_seen for {email}: {e}")
+    except Exception:
+        pass
 
 def generate_otp(length=6):
     return "".join([str(random.randint(0, 9)) for _ in range(length)])
@@ -393,18 +357,27 @@ def log_editor_action(staff_id, action, document_name):
         timestamp = datetime.now(IST_TZ).isoformat()
         conn = sqlite3.connect(EDIT_LOGS_DB_PATH)
         cursor = conn.cursor()
-        cursor.execute(
-            """
-            INSERT INTO edit_logs (staff_id, timestamp, action_performed, document_name)
-            VALUES (?, ?, ?, ?)
-            """,
-            (staff_id, timestamp, action, document_name)
-        )
+        cursor.execute("INSERT INTO edit_logs (staff_id, timestamp, action_performed, document_name) VALUES (?, ?, ?, ?)",
+                       (staff_id, timestamp, action, document_name))
         conn.commit()
         conn.close()
-        print(f"Logged action: {action} for {document_name} by {staff_id}")
+    except Exception:
+        pass
+
+# --- NEW HELPER: Get Official Email ---
+def get_department_email(category):
+    """Reads department_emails.txt and finds the email for the category."""
+    try:
+        if os.path.exists("department_emails.txt"):
+            with open("department_emails.txt", "r") as f:
+                for line in f:
+                    if "=" in line:
+                        key, value = line.strip().split("=")
+                        if key.lower() == category.lower():
+                            return value
     except Exception as e:
-        print(f"Error logging editor action: {e}")
+        print(f"Error reading email file: {e}")
+    return os.environ.get("email_id") # Fallback to admin
 
 # --- 9. User API Endpoints ---
 @app.route('/request-otp', methods=['POST'])
@@ -412,93 +385,61 @@ def request_otp():
     try:
         data = request.json
         email = data.get('email')
-        if not email:
-            return jsonify({"error": "Email is required"}), 400
+        if not email: return jsonify({"error": "Email is required"}), 400
         otp = generate_otp()
         otp_hashed = hash_otp(otp)
-        now = datetime.now(IST_TZ)
-        expires = now + timedelta(minutes=10)
-        expires_at_str = expires.isoformat()
+        expires = datetime.now(IST_TZ) + timedelta(minutes=10)
+        
         conn = sqlite3.connect(OTP_DB_PATH)
         cursor = conn.cursor()
         cursor.execute("DELETE FROM otp_requests WHERE email = ?", (email,))
-        cursor.execute(
-            "INSERT INTO otp_requests (email, otp_hash, expires_at) VALUES (?, ?, ?)",
-            (email, otp_hashed, expires_at_str)
-        )
+        cursor.execute("INSERT INTO otp_requests (email, otp_hash, expires_at) VALUES (?, ?, ?)", 
+                       (email, otp_hashed, expires.isoformat()))
         conn.commit()
         conn.close()
+        
         if not gmail_send_otp.send_otp_email_gmail(email, otp):
-            print(f"Failed to send OTP email to {email}")
             return jsonify({"error": "Failed to send OTP email"}), 500
-        return jsonify({"status": "success", "message": "OTP sent to your email."})
-    except Exception as e:
-        print(f"Error in /request-otp: {e}")
-        return jsonify({"error": "An internal server error occurred"}), 500
+        return jsonify({"status": "success", "message": "OTP sent."})
+    except Exception:
+        return jsonify({"error": "Server error"}), 500
 
 @app.route('/login', methods=['POST'])
 def login_user():
     try:
         data = request.json
-        user_name = data.get('name')
         email = data.get('email')
+        otp = data.get('otp')
+        name = data.get('name')
         phone = data.get('phone')
-        otp_submitted = data.get('otp')
-        if not email or not otp_submitted:
-            return jsonify({"error": "Email and OTP are required"}), 400
         
-        conn_otp = sqlite3.connect(OTP_DB_PATH)
-        cursor_otp = conn_otp.cursor()
-        now_str = datetime.now(IST_TZ).isoformat()
-        otp_submitted_hash = hash_otp(otp_submitted)
-        cursor_otp.execute(
-            "SELECT id FROM otp_requests WHERE email = ? AND otp_hash = ? AND expires_at > ?",
-            (email, otp_submitted_hash, now_str)
-        )
-        valid_otp_row = cursor_otp.fetchone()
+        conn = sqlite3.connect(OTP_DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM otp_requests WHERE email = ? AND otp_hash = ? AND expires_at > ?", 
+                       (email, hash_otp(otp), datetime.now(IST_TZ).isoformat()))
+        row = cursor.fetchone()
+        conn.close()
         
-        if not valid_otp_row:
-            conn_otp.close()
-            return jsonify({"error": "Invalid or expired OTP"}), 401
-        
-        cursor_otp.execute("DELETE FROM otp_requests WHERE id = ?", (valid_otp_row[0],))
-        conn_otp.commit()
-        conn_otp.close()
+        if not row: return jsonify({"error": "Invalid/Expired OTP"}), 401
         
         timestamp = datetime.now(IST_TZ).isoformat()
         conn = sqlite3.connect(USERS_DB_PATH)
         cursor = conn.cursor()
         cursor.execute("SELECT id FROM all_users WHERE email = ?", (email,))
-        user = cursor.fetchone()
-        
-        if user:
-            cursor.execute(
-                "UPDATE all_users SET last_seen = ? WHERE email = ?",
-                (timestamp, email)
-            )
-            message = "Login successful"
+        if cursor.fetchone():
+            cursor.execute("UPDATE all_users SET last_seen = ? WHERE email = ?", (timestamp, email))
+            msg = "Login successful"
         else:
-            cursor.execute(
-                "INSERT INTO all_users (user_name, email, phone_number, first_seen, last_seen) VALUES (?, ?, ?, ?, ?)",
-                (user_name, email, phone, timestamp, timestamp)
-            )
-            message = "Registration successful"
-        
+            cursor.execute("INSERT INTO all_users (user_name, email, phone_number, first_seen, last_seen) VALUES (?, ?, ?, ?, ?)",
+                           (name, email, phone, timestamp, timestamp))
+            msg = "Registration successful"
         conn.commit()
         conn.close()
-        return jsonify({"status": "success", "message": message, "email": email})
+        return jsonify({"status": "success", "message": msg, "email": email})
+    except Exception:
+        return jsonify({"error": "Server error"}), 500
 
-    except sqlite3.IntegrityError:
-        if 'conn_otp' in locals() and conn_otp: conn_otp.close()
-        if 'conn' in locals() and conn: conn.close()
-        update_user_last_seen(email)
-        return jsonify({"status": "success", "message": "Login successful", "email": email})
-    except Exception as e:
-        if 'conn_otp' in locals() and conn_otp: conn_otp.close()
-        if 'conn' in locals() and conn: conn.close()
-        print(f"Error in /login: {e}")
-        return jsonify({"error": "An internal server error occurred"}), 500
-
+# --- MODIFIED CHAT ROUTE ---
 @app.route('/chat', methods=['POST'])
 def chat():
     try:
@@ -509,40 +450,64 @@ def chat():
         phone_number = data.get('phone_number')
 
         if not query or not email:
-            return jsonify({"error": "Query and email are required"}), 400
+            return jsonify({"error": "Query and email required"}), 400
 
         update_user_last_seen(email)
         print(f"\nReceived query from {email}: {query}")
         
-        answer = rag_chain.invoke(query)
-        print(f"Generated answer: {answer}")
+        # 1. CLASSIFY
+        category = classify_user_query(query)
+        print(f"Detected Category: {category}")
 
+        # 2. RAG ANSWER
+        answer = rag_chain.invoke(query)
+        print(f"Answer: {answer}")
+
+        # 3. SAVE TO ALL CHATS (With Category)
+        try:
+            timestamp = datetime.now(IST_TZ).isoformat()
+            conn = sqlite3.connect(ALL_CHATS_DB_PATH)
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO chat_history (timestamp, user_name, email, phone_number, user_query, bot_response, category)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (timestamp, user_name, email, phone_number, query, answer, category))
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            print(f"Log Error: {e}")
+
+        # 4. CHECK TRIGGER
         trigger_message = "We have received your query, soon our concerned department will contact you. Thank You!"
         if answer.strip() == trigger_message:
-            print("Trigger message detected! Saving to escalated_queries.db...")
+            print(f"Trigger! Escalating to {category}...")
             try:
-                timestamp = datetime.now(IST_TZ).isoformat()
-                conn_details = sqlite3.connect(ESCALATED_DB_PATH)
-                cursor_details = conn_details.cursor()
-                cursor_details.execute(
-                    "INSERT INTO escalated_queries (timestamp, user_name, email, phone_number, query_text, bot_response, status, remarks) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                    (timestamp, user_name or 'Not Provided', email or 'Not Provided', phone_number or 'Not Provided', query, answer, "Initiated", "")
-                )
-                conn_details.commit()
-                conn_details.close()
-                print("Escalated query saved successfully.")
+                # Save to Escalated DB
+                conn = sqlite3.connect(ESCALATED_DB_PATH)
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT INTO escalated_queries (timestamp, user_name, email, phone_number, query_text, bot_response, status, remarks, category) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (timestamp, user_name or 'N/A', email, phone_number or 'N/A', query, answer, "Initiated", "", category))
+                conn.commit()
+                conn.close()
+                
+                # Send Gmail
+                target_email = get_department_email(category)
+                user_info = {"user_name": user_name, "email": email, "phone_number": phone_number}
+                send_escalation_email_gmail(target_email, category, user_info, query, answer)
+                
             except Exception as e:
-                print(f"Error logging to escalated_queries.db: {e}")
-        else:
-            print("Standard response. Not saving to escalated database.")
-        return jsonify({"answer": answer})
-    except Exception as e:
-        print(f"An error occurred in the /chat route: {e}")
-        return jsonify({"error": "An internal server error occurred"}), 500
+                print(f"Escalation Error: {e}")
 
-# --- 10. Admin Endpoints ---
+        return jsonify({"answer": answer})
+    except Exception:
+        return jsonify({"error": "Server error"}), 500
+
+# --- Admin Endpoints (Unchanged logic, just ensure connections work) ---
 @app.route('/admin/stats', methods=['GET'])
 def get_admin_stats():
+    # ... (Keep your existing stats logic)
     try:
         conn_users = sqlite3.connect(USERS_DB_PATH)
         cursor_users = conn_users.cursor()
@@ -552,6 +517,7 @@ def get_admin_stats():
         cursor_users.execute("SELECT COUNT(id) FROM all_users WHERE last_seen LIKE ?", (today_str + '%',))
         today_users = cursor_users.fetchone()[0]
         conn_users.close()
+        
         conn_details = sqlite3.connect(ESCALATED_DB_PATH)
         cursor_details = conn_details.cursor()
         cursor_details.execute("SELECT COUNT(id) FROM escalated_queries WHERE status = 'Initiated'")
@@ -559,14 +525,12 @@ def get_admin_stats():
         cursor_details.execute("SELECT COUNT(id) FROM escalated_queries WHERE status = 'Finished'")
         total_solved = cursor_details.fetchone()[0]
         conn_details.close()
-        stats = {
+        return jsonify({
             "totalUniqueUsers": total_unique_users, "todayUsers": today_users,
             "totalEscalated": total_escalated, "totalSolved": total_solved
-        }
-        return jsonify(stats)
-    except Exception as e:
-        print(f"Error in /admin/stats: {e}")
-        return jsonify({"error": "An internal server error occurred"}), 500
+        })
+    except Exception:
+        return jsonify({"error": "Error"}), 500
 
 @app.route('/admin/escalated-queries', methods=['GET'])
 def get_escalated_queries():
@@ -690,8 +654,8 @@ def get_today_users():
     except Exception as e:
         print(f"Error in /admin/today-users: {e}")
         return jsonify({"error": "An internal server error occurred"}), 500
-        
-# --- 11. Admin-Editor Endpoints (New) ---
+
+# --- 11. Admin-Editor Endpoints ---
 @app.route('/admin/editor-staff', methods=['GET'])
 def get_editor_staff():
     """ Fetches all staff members and their last login time. """
@@ -1174,13 +1138,54 @@ def commit_index():
     except Exception as e:
         print(f"Error in /editor/commit-index: {e}")
         return jsonify({"error": "An internal server error occurred"}), 500
+    
+@app.route('/admin/chat-history', methods=['GET'])
+def get_chat_history():
+    try:
+        conn = sqlite3.connect(ALL_CHATS_DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM chat_history ORDER BY timestamp DESC")
+        rows = cursor.fetchall()
+        chats = [dict(row) for row in rows]
+        conn.close()
+        return jsonify(chats)
+    except Exception as e:
+        print(f"Error in /admin/chat-history: {e}")
+        return jsonify({"error": "An internal server error occurred"}), 500
+    # --- NEW: Routes to Manage Department Emails ---
+@app.route('/admin/get-email-config', methods=['GET'])
+def get_email_config():
+    """Reads the department_emails.txt file."""
+    try:
+        if os.path.exists("department_emails.txt"):
+            with open("department_emails.txt", "r") as f:
+                content = f.read()
+            return jsonify({"content": content})
+        return jsonify({"content": ""})
+    except Exception as e:
+        print(f"Error reading email config: {e}")
+        return jsonify({"error": "Failed to read config"}), 500
+
+@app.route('/admin/save-email-config', methods=['POST'])
+def save_email_config():
+    """Overwrites the department_emails.txt file."""
+    try:
+        data = request.json
+        content = data.get('content')
+        if content is None:
+            return jsonify({"error": "Content is required"}), 400
+        
+        with open("department_emails.txt", "w") as f:
+            f.write(content)
+            
+        return jsonify({"status": "success", "message": "Email configuration saved."})
+    except Exception as e:
+        print(f"Error saving email config: {e}")
+        return jsonify({"error": "Failed to save config"}), 500
 
 # --- 13. Run the Flask App ---
 if __name__ == "__main__":
-    print("\n--- BIT Chatbot Backend is Starting ---")
-    print(f"--- Database File: {EDITOR_STAFF_DB_PATH} ---")
-    print("Using Gmail API for sending OTPs.")
-    print("Editor and Admin endpoints are active.")
-    print("PDF and DOCX text extraction is ENABLED.")
-    print("Access the API at http://127.0.0.1:5000")
+    print("\n--- BIT Chatbot Backend Started ---")
+    print("Using Gmail API for OTP & Escalation.")
     app.run(debug=True, port=5000)

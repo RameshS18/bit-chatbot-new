@@ -1,0 +1,5 @@
+Admission=ramesh.cd23@bitsathy.ac.in
+Hostel=ramesh.cd23@bitsathy.ac.in
+Campus-Facility=ramesh.cd23@bitsathy.ac.in
+Placement=ramesh.cd23@bitsathy.ac.in
+General=ramesh.cd23@bitsathy.ac.in

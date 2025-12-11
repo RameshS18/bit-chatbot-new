@@ -4,7 +4,7 @@ import axios from 'axios'
 import {
   Lock, Mail, LogOut, User, FileText, Plus, Save, Trash2,
   ChevronLeft, Loader2, Search, X, UserCheck, Eye, UploadCloud, Folder, Upload,
-  Download, FolderOpen, File as FileIcon // <-- New icons
+  Download, FolderOpen, File as FileIcon, Settings // <-- Added Settings Icon
 } from 'lucide-react'
 
 // Helper component for loading spinners
@@ -29,6 +29,88 @@ const Toast = ({ message, type, onClose }) => {
       <button onClick={onClose} className="text-white hover:bg-white/20 rounded-full p-1">
         <X size={18} />
       </button>
+    </div>
+  )
+}
+
+// --- NEW: Email Configuration Modal (Moved here for Security) ---
+const EmailConfigModal = ({ onClose }) => {
+  const [content, setContent] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    fetchConfig()
+  }, [])
+
+  const fetchConfig = async () => {
+    try {
+      const response = await axios.get('/api/admin/get-email-config')
+      setContent(response.data.content)
+    } catch (error) {
+      alert('Failed to load email configuration')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      await axios.post('/api/admin/save-email-config', { content })
+      alert('Department emails updated successfully!')
+      onClose()
+    } catch (error) {
+      alert('Failed to save configuration')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-fade-in">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl animate-fade-in-up overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="bg-gradient-to-r from-gray-700 to-gray-800 px-6 py-4 flex justify-between items-center shrink-0">
+          <h3 className="text-xl font-bold text-white flex items-center gap-2">
+            <Settings size={20} />
+            Department Email Settings
+          </h3>
+          <button onClick={onClose} className="text-white hover:bg-white/20 rounded-full p-2">
+            <X size={20} />
+          </button>
+        </div>
+        
+        <div className="p-6 flex-1 overflow-y-auto">
+          <p className="text-sm text-gray-500 mb-4 bg-yellow-50 p-3 rounded border border-yellow-200">
+            <strong>Instructions:</strong> Edit the file below to map categories to emails. <br/>
+            Format: <code>Category=email@domain.com</code> <br/>
+            The system reads this file every time an escalation occurs.
+          </p>
+          
+          {loading ? (
+            <div className="py-10 text-center"><Spinner size={32} /></div>
+          ) : (
+            <textarea 
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              className="w-full h-96 p-4 font-mono text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 outline-none resize-none"
+              spellCheck="false"
+            />
+          )}
+        </div>
+
+        <div className="px-6 py-4 bg-gray-50 flex justify-end gap-3 border-t shrink-0">
+          <button onClick={onClose} className="px-4 py-2 text-gray-600 hover:bg-gray-200 rounded-lg font-medium">Cancel</button>
+          <button 
+            onClick={handleSave} 
+            disabled={saving || loading}
+            className="flex items-center gap-2 bg-gray-800 hover:bg-gray-900 text-white px-6 py-2 rounded-lg font-medium transition-colors disabled:opacity-50"
+          >
+            {saving ? <Spinner size={18} /> : <Save size={18} />}
+            <span>Save Changes</span>
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -201,12 +283,11 @@ const EditorLoginStep2 = ({ onStaffVerified }) => {
   )
 }
 
-// --- NEW: File Browser Modal Component ---
+// --- File Browser Modal Component ---
 const FileBrowserModal = ({ allFiles, onFileSelect, onClose }) => {
   const [selectedFolder, setSelectedFolder] = useState('Main Folder')
   const [searchTerm, setSearchTerm] = useState('')
 
-  // This logic processes the file list once and is fast
   const { folders, filesByFolder } = useMemo(() => {
     const folders = new Set(['Main Folder'])
     const filesByFolder = { 'Main Folder': [] }
@@ -226,7 +307,6 @@ const FileBrowserModal = ({ allFiles, onFileSelect, onClose }) => {
     return { folders: Array.from(folders).sort(), filesByFolder }
   }, [allFiles])
 
-  // Filter files based on search term
   const filteredFiles = useMemo(() => {
     if (!searchTerm) {
       return filesByFolder[selectedFolder]
@@ -244,13 +324,12 @@ const FileBrowserModal = ({ allFiles, onFileSelect, onClose }) => {
   return (
     <div 
       className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-40 p-4 backdrop-blur-sm"
-      onClick={onClose} // Close modal on background click
+      onClick={onClose} 
     >
       <div
         className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[80vh] flex flex-col overflow-hidden animate-fade-in-up"
-        onClick={(e) => e.stopPropagation()} // Prevent modal from closing when clicking inside
+        onClick={(e) => e.stopPropagation()} 
       >
-        {/* Header */}
         <div className="p-5 border-b border-gray-200 flex justify-between items-center">
           <h3 className="text-2xl font-bold text-gray-800">Browse Files</h3>
           <button
@@ -261,9 +340,7 @@ const FileBrowserModal = ({ allFiles, onFileSelect, onClose }) => {
           </button>
         </div>
         
-        {/* Content */}
         <div className="flex-1 flex min-h-0">
-          {/* Folder List */}
           <div className="w-1/3 bg-gray-50 border-r border-gray-200 overflow-y-auto">
             <ul className="divide-y divide-gray-200">
               {folders.map(folder => (
@@ -271,7 +348,7 @@ const FileBrowserModal = ({ allFiles, onFileSelect, onClose }) => {
                   key={folder}
                   onClick={() => {
                     setSelectedFolder(folder)
-                    setSearchTerm('') // Clear search when changing folder
+                    setSearchTerm('')
                   }}
                   className={`p-4 flex items-center space-x-3 cursor-pointer transition-colors ${
                     selectedFolder === folder
@@ -286,7 +363,6 @@ const FileBrowserModal = ({ allFiles, onFileSelect, onClose }) => {
             </ul>
           </div>
           
-          {/* File List */}
           <div className="w-2/3 flex flex-col overflow-y-auto">
             <div className="p-4 border-b border-gray-200">
               <div className="relative">
@@ -316,7 +392,6 @@ const FileBrowserModal = ({ allFiles, onFileSelect, onClose }) => {
                       className="p-4 flex items-center space-x-3 cursor-pointer hover:bg-gray-50 transition-colors"
                     >
                       <FileText size={18} className="text-gray-500" />
-                      {/* Show only the filename, not the full path */}
                       <span className="text-gray-800">{file.split('/').pop()}</span>
                     </li>
                   ))}
@@ -329,12 +404,11 @@ const FileBrowserModal = ({ allFiles, onFileSelect, onClose }) => {
     </div>
   )
 }
-// --- END: File Browser Modal Component ---
 
 // --- Main Editor Interface ---
 const EditorInterface = ({ staffId, sessionId, onLogout }) => {
   const navigate = useNavigate()
-  const [allFiles, setAllFiles] = useState([]) // --- RENAMED
+  const [allFiles, setAllFiles] = useState([]) 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [toast, setToast] = useState(null)
@@ -353,8 +427,10 @@ const EditorInterface = ({ staffId, sessionId, onLogout }) => {
   const [fileToUpload, setFileToUpload] = useState(null)
   const [isUploading, setIsUploading] = useState(false)
   
-  // --- NEW: Modal State ---
   const [showFileBrowser, setShowFileBrowser] = useState(false)
+  
+  // --- NEW STATE: Show Email Config ---
+  const [showEmailConfig, setShowEmailConfig] = useState(false)
 
   const isReadOnly = (filename) => {
     if (!filename) return false;
@@ -378,7 +454,7 @@ const EditorInterface = ({ staffId, sessionId, onLogout }) => {
       setLoading(true)
       setError('')
       const response = await axios.get('/api/editor/get-documents')
-      setAllFiles(response.data.sort()) // --- RENAMED
+      setAllFiles(response.data.sort()) 
     } catch (err) {
       setError('Failed to fetch documents.')
     } finally {
@@ -557,13 +633,17 @@ const EditorInterface = ({ staffId, sessionId, onLogout }) => {
 
   return (
     <>
-      {/* --- NEW: Render the modal if showFileBrowser is true --- */}
       {showFileBrowser && (
         <FileBrowserModal
           allFiles={allFiles}
           onClose={() => setShowFileBrowser(false)}
           onFileSelect={handleFileSelect}
         />
+      )}
+      
+      {/* --- NEW: Render Email Config Modal --- */}
+      {showEmailConfig && (
+        <EmailConfigModal onClose={() => setShowEmailConfig(false)} />
       )}
     
       <div className="min-h-screen w-full flex bg-gray-100">
@@ -577,10 +657,9 @@ const EditorInterface = ({ staffId, sessionId, onLogout }) => {
             <p className="text-sm text-gray-500">Logged in as {staffId}</p>
           </div>
 
-          {/* --- MODIFIED: "Browse" button --- */}
           <div className="p-4">
             <button
-              onClick={() => setShowFileBrowser(true)} // <-- Open modal
+              onClick={() => setShowFileBrowser(true)} 
               className="w-full flex items-center justify-center space-x-2 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-2.5 rounded-lg transition-colors"
             >
               <FolderOpen size={18} />
@@ -638,12 +717,19 @@ const EditorInterface = ({ staffId, sessionId, onLogout }) => {
             </button>
           </div>
 
-          {/* --- REMOVED: Long file list --- */}
-          {/* The flex-1 just fills the empty space now */}
           <div className="flex-1 overflow-y-auto"></div>
 
           {/* Footer */}
           <div className="p-4 border-t border-gray-200 space-y-2">
+             {/* --- NEW: Email Settings Button --- */}
+             <button
+              onClick={() => setShowEmailConfig(true)}
+              className="w-full flex items-center justify-center space-x-2 bg-gray-800 hover:bg-gray-900 text-white font-semibold py-2 rounded-lg transition-colors"
+            >
+              <Settings size={18} />
+              <span>Email Settings</span>
+            </button>
+
              <button
               onClick={() => navigate('/admin')}
               className="w-full flex items-center justify-center space-x-2 bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2 rounded-lg transition-colors"
@@ -683,7 +769,6 @@ const EditorInterface = ({ staffId, sessionId, onLogout }) => {
 
             <div>
               {isCreating ? (
-                // --- Buttons for NEW .txt file ---
                 <div className="flex space-x-3">
                   <button
                     onClick={() => setIsCreating(false)}
@@ -699,7 +784,6 @@ const EditorInterface = ({ staffId, sessionId, onLogout }) => {
                   </button>
                 </div>
               ) : selectedFile ? (
-                // --- Buttons for EXISTING file ---
                 <div className="flex space-x-3">
                   <button
                     onClick={handleDownload}
@@ -730,7 +814,6 @@ const EditorInterface = ({ staffId, sessionId, onLogout }) => {
                   </button>
                 </div>
               ) : (
-                // --- "New Text File" button when nothing is selected ---
                  <button
                     onClick={handleCreateNewTextFile}
                     className="w-full flex items-center justify-center space-x-2 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
@@ -836,7 +919,6 @@ const EditorPage = () => {
     }
   }
 
-  // --- NEW: Add CSS for the modal animation ---
   return (
     <>
       <style>{`

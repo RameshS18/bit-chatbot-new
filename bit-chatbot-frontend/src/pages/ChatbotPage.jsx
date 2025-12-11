@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Home, LogOut } from 'lucide-react';
+import { Send, LogOut } from 'lucide-react'; 
 import DOMPurify from 'dompurify';
 
 const botIconUrl = '/images/new svg.svg';
@@ -14,7 +14,6 @@ const ChatbotPage = () => {
   const [followUpActions, setFollowUpActions] = useState([]);
   const [autoScrollEnabled, setAutoScrollEnabled] = useState(true);
 
-
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const typingIntervalRef = useRef(null);
@@ -23,8 +22,10 @@ const ChatbotPage = () => {
   const initialLoadRef = useRef(true);
   const sendTimeoutRef = useRef(null);
   
+  // --- NEW: Security Refs ---
+  const lastActivityRef = useRef(Date.now()); 
+  const lastMessageTimeRef = useRef(0);       
 
-  // All available follow-up actions
   const allFollowUpActions = [
     "Tell me more about placements",
     "Tell me about campus life",
@@ -36,7 +37,7 @@ const ChatbotPage = () => {
     "What about scholarships?"
   ];
 
-  // Check authentication and load user data with error handling
+  // --- SECURITY 1: Strict Session Validation ---
   useEffect(() => {
     try {
       const storedUser = localStorage.getItem('bitChatbotUser');
@@ -45,17 +46,46 @@ const ChatbotPage = () => {
         return;
       }
       const parsedUser = JSON.parse(storedUser);
-      if (!parsedUser || !parsedUser.name || !parsedUser.email) {
-        localStorage.removeItem('bitChatbotUser');
-        window.location.href = '/';
-        return;
+      if (!parsedUser || !parsedUser.name || !parsedUser.email || !parsedUser.phone) {
+        throw new Error("Corrupted or incomplete session data");
       }
       setUserData(parsedUser);
     } catch (error) {
-      console.error('Error loading user data:', error);
-      localStorage.removeItem('bitChatbotUser');
-      window.location.href = '/';
+      console.error('Security Check Failed:', error);
+      localStorage.removeItem('bitChatbotUser'); 
+      window.location.href = '/'; 
     }
+  }, []);
+
+  // --- SECURITY 2: 10-Minute Inactivity Auto-Logout ---
+  useEffect(() => {
+    const updateActivity = () => {
+      lastActivityRef.current = Date.now();
+    };
+
+    window.addEventListener('mousemove', updateActivity);
+    window.addEventListener('keypress', updateActivity);
+    window.addEventListener('click', updateActivity);
+    window.addEventListener('scroll', updateActivity);
+    window.addEventListener('touchstart', updateActivity);
+
+    const inactivityInterval = setInterval(() => {
+      const now = Date.now();
+      const tenMinutes = 10 * 60 * 1000; 
+
+      if (now - lastActivityRef.current > tenMinutes) {
+        handleLogout();
+      }
+    }, 30000); 
+
+    return () => {
+      window.removeEventListener('mousemove', updateActivity);
+      window.removeEventListener('keypress', updateActivity);
+      window.removeEventListener('click', updateActivity);
+      window.removeEventListener('scroll', updateActivity);
+      window.removeEventListener('touchstart', updateActivity);
+      clearInterval(inactivityInterval);
+    };
   }, []);
 
   // Send login request when user data loads
@@ -74,10 +104,10 @@ const ChatbotPage = () => {
             })
           });
           if (!response.ok) {
-            console.error('Login request failed:', response.status);
+            console.error('Session registration failed on backend');
           }
         } catch (error) {
-          console.error('Error registering user session:', error);
+          console.error('Network error during session registration');
         }
       };
       loginUser();
@@ -89,76 +119,67 @@ const ChatbotPage = () => {
       }]);
     }
   }, [userData]);
-// Simple Perplexity-style auto-scroll control - FIXED VERSION
-useEffect(() => {
-  const container = messagesContainerRef.current;
-  if (!container) return;
 
-  let lastScrollTop = container.scrollTop;
-  let scrollTimeout = null;
+  // Scroll Handling
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
 
-  const handleScroll = () => {
-    // Ignore scroll events caused by typing animation
-    if (isLoading && typingText) {
-      return; // Skip detection during typing animation
-    }
+    let lastScrollTop = container.scrollTop;
+    let scrollTimeout = null;
 
-    // Clear any pending timeout
-    if (scrollTimeout) clearTimeout(scrollTimeout);
+    const handleScroll = () => {
+      if (isLoading && typingText) return;
 
-    // Debounce to avoid rapid-fire scroll events
-    scrollTimeout = setTimeout(() => {
-      const currentScrollTop = container.scrollTop;
-      const scrollHeight = container.scrollHeight;
-      const clientHeight = container.clientHeight;
-      const isAtBottom = scrollHeight - currentScrollTop - clientHeight < 50;
+      if (scrollTimeout) clearTimeout(scrollTimeout);
 
-      // If user scrolled UP (even 1px), disable auto-scroll immediately
-      if (currentScrollTop < lastScrollTop) {
-        setAutoScrollEnabled(false);
+      scrollTimeout = setTimeout(() => {
+        const currentScrollTop = container.scrollTop;
+        const scrollHeight = container.scrollHeight;
+        const clientHeight = container.clientHeight;
+        const isAtBottom = scrollHeight - currentScrollTop - clientHeight < 50;
+
+        if (currentScrollTop < lastScrollTop) {
+          setAutoScrollEnabled(false);
+        } else if (isAtBottom) {
+          setAutoScrollEnabled(true);
+        }
+
+        lastScrollTop = currentScrollTop;
+      }, 50);
+    };
+
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+      if (scrollTimeout) clearTimeout(scrollTimeout);
+    };
+  }, [isLoading, typingText]);
+
+  // Auto-scroll effect
+  useEffect(() => {
+    if (!autoScrollEnabled) return;
+
+    const scrollToBottom = () => {
+      if (messagesEndRef.current) {
+        messagesEndRef.current.scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'end',
+          inline: 'nearest'
+        });
       }
-      // If user is at bottom, enable auto-scroll
-      else if (isAtBottom) {
-        setAutoScrollEnabled(true);
-      }
+    };
 
-      lastScrollTop = currentScrollTop;
-    }, 50); // 50ms debounce
-  };
+    const rafId = requestAnimationFrame(scrollToBottom);
+    return () => cancelAnimationFrame(rafId);
+  }, [messages, typingText, autoScrollEnabled]);
 
-  container.addEventListener('scroll', handleScroll, { passive: true });
-  return () => {
-    container.removeEventListener('scroll', handleScroll);
-    if (scrollTimeout) clearTimeout(scrollTimeout);
-  };
-}, [isLoading, typingText]); // Add dependencies to track typing state
-
-// Auto-scroll effect - only runs if enabled
-useEffect(() => {
-  if (!autoScrollEnabled) return;
-
-  const scrollToBottom = () => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ 
-        behavior: 'smooth', 
-        block: 'end',
-        inline: 'nearest'
-      });
-    }
-  };
-
-  const rafId = requestAnimationFrame(scrollToBottom);
-  return () => cancelAnimationFrame(rafId);
-}, [messages, typingText, autoScrollEnabled]);
-
-
-  // Get random follow-up actions
   const getRandomFollowUpActions = () => {
     const shuffled = [...allFollowUpActions].sort(() => 0.5 - Math.random());
     return shuffled.slice(0, 2);
   };
 
-  // Typing animation effect with proper cleanup and optimized speed
+  // --- UPDATED: Time-Based Typing Animation (Background Proof & Faster) ---
   useEffect(() => {
     if (typingIntervalRef.current) {
       clearInterval(typingIntervalRef.current);
@@ -166,14 +187,21 @@ useEffect(() => {
     }
 
     if (fullResponse && isLoading) {
-      let index = 0;
+      const startTime = Date.now();
+      const typingSpeed = 3; // Lower number = Faster typing (ms per char)
+      
       setTypingText('');
       
       typingIntervalRef.current = setInterval(() => {
-        if (index < fullResponse.length) {
-          setTypingText(fullResponse.substring(0, index + 1));
-          index++;
+        // Calculate how many characters should be shown based on elapsed time
+        // This ensures if the tab is inactive (throttled), it jumps ahead correctly
+        const elapsed = Date.now() - startTime;
+        const charIndex = Math.floor(elapsed / typingSpeed);
+        
+        if (charIndex < fullResponse.length) {
+          setTypingText(fullResponse.substring(0, charIndex + 1));
         } else {
+          // Animation Complete
           clearInterval(typingIntervalRef.current);
           typingIntervalRef.current = null;
           
@@ -188,7 +216,7 @@ useEffect(() => {
           setFullResponse('');
           setFollowUpActions(getRandomFollowUpActions());
         }
-      }, 1); // Reduced delay for faster typing
+      }, 10); // Update every 10ms (smoothness)
     }
 
     return () => {
@@ -199,7 +227,6 @@ useEffect(() => {
     };
   }, [fullResponse, isLoading]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (sendTimeoutRef.current) {
@@ -211,7 +238,6 @@ useEffect(() => {
     };
   }, []);
 
-  // Format and sanitize bot messages with enhanced security
   const formatBotMessage = (text) => {
     const preSanitized = DOMPurify.sanitize(text, {
       ALLOWED_TAGS: [],
@@ -245,7 +271,6 @@ useEffect(() => {
     return sanitized;
   };
 
-  // Improved textarea height adjustment with cross-browser support
   const adjustTextareaHeight = () => {
     if (!inputRef.current) return;
     const textarea = inputRef.current;
@@ -257,7 +282,6 @@ useEffect(() => {
     const paddingBottom = parseFloat(computed.paddingBottom);
     const borderTop = parseFloat(computed.borderTopWidth);
     const borderBottom = parseFloat(computed.borderBottomWidth);
-    const extraHeight = paddingTop + paddingBottom + borderTop + borderBottom;
     
     const scrollHeight = textarea.scrollHeight;
     const maxHeight = 128;
@@ -267,13 +291,21 @@ useEffect(() => {
     textarea.style.overflowY = (scrollHeight > maxHeight) ? 'auto' : 'hidden';
   };
 
-  // Handle sending message with proper race condition prevention
   const handleSendMessage = async (messageText = inputMessage) => {
     const trimmedInput = messageText.trim();
     if (!trimmedInput || isLoading || !userData) return;
 
+    // --- SECURITY 3: Anti-Spam / Rate Limiting ---
+    const now = Date.now();
+    if (now - lastMessageTimeRef.current < 1000) {
+        return; 
+    }
+    lastMessageTimeRef.current = now;
+
     if (isSendingRef.current) return;
     isSendingRef.current = true;
+
+    lastActivityRef.current = Date.now();
 
     const userMessage = {
       type: 'user',
@@ -343,6 +375,7 @@ useEffect(() => {
   };
 
   const handleInputChange = (e) => {
+    lastActivityRef.current = Date.now(); 
     if (e.target.value.length <= 500) {
       setInputMessage(e.target.value);
       requestAnimationFrame(() => adjustTextareaHeight());
@@ -356,15 +389,12 @@ useEffect(() => {
   };
 
   const handleInputFocus = () => {
+    lastActivityRef.current = Date.now();
     setTimeout(() => {
       if (messagesEndRef.current) {
         messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       }
     }, 200);
-  };
-
-  const handleHomeClick = () => {
-    window.location.href = '/';
   };
 
   const handleLogout = () => {
@@ -388,7 +418,7 @@ useEffect(() => {
       <div className="fixed inset-0 flex items-center justify-center bg-gradient-to-b from-purple-50 to-white">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
+          <p className="text-gray-600">Verifying session...</p>
         </div>
       </div>
     );
@@ -431,14 +461,7 @@ useEffect(() => {
                 <p className="text-xs text-purple-300 capitalize">{userData.userType}</p>
               </div>
             )}
-            <button
-              onClick={handleHomeClick}
-              className="p-2.5 rounded-lg bg-purple-700 hover:bg-purple-600 transition-colors touch-button"
-              type="button"
-              aria-label="Go to home"
-            >
-              <Home size={22} className="text-white" />
-            </button>
+            
             <button
               onClick={handleLogout}
               className="p-2.5 rounded-lg bg-purple-700 hover:bg-purple-600 transition-colors touch-button"
@@ -467,7 +490,8 @@ useEffect(() => {
         ref={messagesContainerRef}
         className="chatbot-messages-container"
       >
-        <div className="max-w-4xl mx-auto w-full flex flex-col gap-4 px-4 sm:px-6 py-4 pb-6">
+        <div className="max-w-4xl mx-auto w-full flex flex-col gap-4 px-4 sm:px-6 py-4 pb-28"> 
+          {/* Increased bottom padding (pb-28) to prevent content being hidden behind floating input */}
           
           {messages.map((message, index) => (
             <div 
@@ -593,70 +617,60 @@ useEffect(() => {
         </div>
       </div>
 
-      {/* Input Area */}
+      {/* FLOATING Input Area */}
       <div className="chatbot-input-wrapper">
         <div className="max-w-4xl mx-auto px-4">
-          <div className="bg-white rounded-3xl shadow-2xl border-2 border-gray-200 p-3">
-            <div className="flex gap-2 items-end">
-              <div className="flex-1 relative">
-                <textarea
-                  ref={inputRef}
-                  rows="1"
-                  className="chatbot-input"
-                  value={inputMessage}
-                  onChange={handleInputChange}
-                  onKeyDown={handleKeyPress}
-                  onFocus={handleInputFocus}
-                  placeholder={isLoading ? "BIT AI Assistant is typing..." : "Type your message..."}
-                  disabled={isLoading}
-                  maxLength={500}
-                  aria-label="Type your message"
-                  autoComplete="off"
-                  autoCorrect="off"
-                  autoCapitalize="sentences"
-                  spellCheck="true"
-                />
-              </div>
-              
-              <button 
-                onClick={() => handleSendMessage()}
-                disabled={!inputMessage.trim() || isLoading} 
-                className="flex-shrink-0 w-12 h-12 bg-gradient-to-r from-purple-600 to-purple-700 rounded-xl flex items-center justify-center shadow-lg hover:shadow-xl active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 touch-button"
-                type="button"
-                aria-label="Send message"
-              >
-                <Send size={22} className="text-white" />
-              </button>
+          <div className="bg-white rounded-[2rem] shadow-xl border border-gray-200 p-2 pl-4 flex items-end gap-2 backdrop-blur-sm bg-opacity-95">
+            <div className="flex-1 relative py-2">
+              <textarea
+                ref={inputRef}
+                rows="1"
+                className="chatbot-input"
+                value={inputMessage}
+                onChange={handleInputChange}
+                onKeyDown={handleKeyPress}
+                onFocus={handleInputFocus}
+                placeholder={isLoading ? "BIT AI Assistant is typing..." : "Type your message..."}
+                disabled={isLoading}
+                maxLength={500}
+                aria-label="Type your message"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="sentences"
+                spellCheck="true"
+              />
             </div>
+            
+            <button 
+              onClick={() => handleSendMessage()}
+              disabled={!inputMessage.trim() || isLoading} 
+              className="flex-shrink-0 w-11 h-11 mb-1 mr-1 bg-gradient-to-r from-purple-600 to-purple-700 rounded-full flex items-center justify-center shadow-md hover:shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 touch-button"
+              type="button"
+              aria-label="Send message"
+            >
+              <Send size={20} className="text-white ml-0.5" />
+            </button>
           </div>
-          <p className="text-xs text-gray-500 mt-2 text-center">
-            Press Enter to send • Shift + Enter for new line
+          <p className="text-[10px] text-gray-400 mt-2 text-center font-medium">
+            AI can make mistakes. Check important info.
           </p>
         </div>
       </div>
 
       <style>{`
-        /* Base container - FORCED LIGHT MODE */
+        /* Base container */
         .chatbot-container {
           position: fixed;
           inset: 0;
           display: flex;
           flex-direction: column;
           height: 100dvh;
-          background: linear-gradient(to bottom, #faf5ff, #ffffff) !important;
+          background: linear-gradient(to bottom, #f3e8ff, #ffffff) !important; /* Lighter background */
           font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
           overflow: hidden;
           -webkit-font-smoothing: antialiased;
           -moz-osx-font-smoothing: grayscale;
           color-scheme: light !important;
-        }
-
-        /* Fallback for browsers without dvh support */
-        @supports not (height: 100dvh) {
-          .chatbot-container {
-            height: 100vh;
-            height: -webkit-fill-available;
-          }
         }
 
         /* Header */
@@ -695,7 +709,7 @@ useEffect(() => {
           }
         }
 
-        /* Messages container - FORCED LIGHT BACKGROUND */
+        /* Messages container */
         .chatbot-messages-container {
           flex: 1;
           overflow-y: auto;
@@ -705,83 +719,58 @@ useEffect(() => {
           overscroll-behavior-x: none;
           position: relative;
           min-height: 0;
-          background: linear-gradient(to bottom, #faf5ff, #ffffff) !important;
+          background: transparent !important;
         }
 
+        /* --- UPDATED: FLOATING INPUT WRAPPER --- */
         .chatbot-input-wrapper {
-  position: relative;
-  z-index: 45;
-  flex-shrink: 0;
-  background: #ffffff !important;
-  padding-top: 12px;
-  padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
-  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);  /* Subtle shadow for depth */
-}
+          position: absolute; /* Floating */
+          bottom: 0;
+          left: 0;
+          right: 0;
+          z-index: 45;
+          padding-bottom: max(24px, env(safe-area-inset-bottom, 20px));
+          background: linear-gradient(to top, rgba(255,255,255,1) 60%, rgba(255,255,255,0)); /* Fade out effect */
+          pointer-events: none; /* Allow clicking through the fade area */
+        }
 
-
-        /* Fallback for older browsers */
-        @supports not (padding: max(0px)) {
-          .chatbot-input-wrapper {
-            padding-bottom: 16px;
-          }
+        .chatbot-input-wrapper > div {
+          pointer-events: auto; /* Re-enable clicks for the input box itself */
         }
 
         /* Input field */
         .chatbot-input {
           width: 100%;
           border: 0;
-          padding: 12px 16px;
-          border-radius: 16px;
-          background: rgb(249, 250, 251);
+          padding: 0;
+          background: transparent;
           color: rgb(31, 41, 55);
           font-size: 16px;
           outline: none;
-          transition: background-color 0.15s ease;
           resize: none;
           line-height: 1.5;
-          min-height: 44px;
+          min-height: 24px;
           max-height: 128px;
           overflow-y: hidden;
           font-family: inherit;
-          -webkit-appearance: none;
-          appearance: none;
-          box-sizing: border-box;
         }
 
-        .chatbot-input:focus {
-          background: rgb(243, 244, 246);
+        .chatbot-input::placeholder {
+          color: #9ca3af;
         }
 
-        .chatbot-input:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
-        }
-
-        /* Enhanced touch targets for mobile */
+        /* Enhanced touch targets */
         .touch-button {
           touch-action: manipulation;
           -webkit-tap-highlight-color: transparent;
-          min-width: 44px;
-          min-height: 44px;
           user-select: none;
           -webkit-user-select: none;
         }
 
-        /* Prevent double-tap zoom */
-        button {
-          touch-action: manipulation;
-        }
-
         /* Animations */
         @keyframes slideUp {
-          from { 
-            opacity: 0; 
-            transform: translate3d(0, 10px, 0);
-          }
-          to { 
-            opacity: 1; 
-            transform: translate3d(0, 0, 0);
-          }
+          from { opacity: 0; transform: translate3d(0, 10px, 0); }
+          to { opacity: 1; transform: translate3d(0, 0, 0); }
         }
 
         @keyframes blink {
@@ -790,14 +779,8 @@ useEffect(() => {
         }
 
         @keyframes thinking {
-          0%, 100% { 
-            opacity: 0.3;
-            transform: scale(0.8);
-          }
-          50% { 
-            opacity: 1;
-            transform: scale(1.2);
-          }
+          0%, 100% { opacity: 0.3; transform: scale(0.8); }
+          50% { opacity: 1; transform: scale(1.2); }
         }
 
         @keyframes pulseText {
@@ -805,156 +788,28 @@ useEffect(() => {
           50% { opacity: 1; }
         }
 
-        .animate-slideUp {
-          animation: slideUp 0.3s ease-out;
-          will-change: transform, opacity;
-        }
+        .animate-slideUp { animation: slideUp 0.3s ease-out; will-change: transform, opacity; }
+        .animate-blink { animation: blink 1s infinite; }
+        .animate-thinking1 { animation: thinking 1.4s infinite ease-in-out; animation-delay: 0s; }
+        .animate-thinking2 { animation: thinking 1.4s infinite ease-in-out; animation-delay: 0.2s; }
+        .animate-thinking3 { animation: thinking 1.4s infinite ease-in-out; animation-delay: 0.4s; }
+        .animate-pulse-text { animation: pulseText 2s ease-in-out infinite; }
 
-        .animate-blink {
-          animation: blink 1s infinite;
-        }
-
-        .animate-thinking1 {
-          animation: thinking 1.4s infinite ease-in-out;
-          animation-delay: 0s;
-        }
-
-        .animate-thinking2 {
-          animation: thinking 1.4s infinite ease-in-out;
-          animation-delay: 0.2s;
-        }
-
-        .animate-thinking3 {
-          animation: thinking 1.4s infinite ease-in-out;
-          animation-delay: 0.4s;
-        }
-
-        .animate-pulse-text {
-          animation: pulseText 2s ease-in-out infinite;
-        }
-
-        /* Custom scrollbars - Webkit */
-        .chatbot-messages-container::-webkit-scrollbar {
-          width: 6px;
-        }
-
-        .chatbot-messages-container::-webkit-scrollbar-track {
-          background: transparent;
-        }
-
-        .chatbot-messages-container::-webkit-scrollbar-thumb {
-          background: rgb(203, 213, 225);
-          border-radius: 10px;
-        }
-
-        .chatbot-messages-container::-webkit-scrollbar-thumb:hover {
-          background: rgb(148, 163, 184);
-        }
-
-        /* Firefox scrollbar */
-        .chatbot-messages-container {
-          scrollbar-width: thin;
-          scrollbar-color: rgb(203, 213, 225) transparent;
-        }
-
-        /* Input scrollbar - Webkit */
-        .chatbot-input::-webkit-scrollbar {
-          width: 4px;
-        }
-
-        .chatbot-input::-webkit-scrollbar-track {
-          background: transparent;
-        }
-
-        .chatbot-input::-webkit-scrollbar-thumb {
-          background: rgb(203, 213, 225);
-          border-radius: 10px;
-        }
-
-        /* Input scrollbar - Firefox */
-        .chatbot-input {
-          scrollbar-width: thin;
-          scrollbar-color: rgb(203, 213, 225) transparent;
-        }
-
-        /* Active state */
-        button:active:not(:disabled) {
-          transform: scale(0.98);
-        }
-
+        /* Scrollbars */
+        .chatbot-messages-container::-webkit-scrollbar { width: 6px; }
+        .chatbot-messages-container::-webkit-scrollbar-track { background: transparent; }
+        .chatbot-messages-container::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 10px; }
+        
+        button:active:not(:disabled) { transform: scale(0.95); }
+        
         /* Link styles */
-        .chatbot-messages-container a {
-          word-break: break-all;
-          overflow-wrap: anywhere;
-        }
+        .chatbot-messages-container a { word-break: break-all; overflow-wrap: anywhere; }
 
         /* Loading spinner */
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .animate-spin { animation: spin 1s linear infinite; }
 
-        .animate-spin {
-          animation: spin 1s linear infinite;
-        }
-
-        /* iOS specific fixes */
-        @supports (-webkit-touch-callout: none) {
-          .chatbot-messages-container {
-            -webkit-overflow-scrolling: touch;
-            overscroll-behavior-y: none;
-          }
-
-          .chatbot-input {
-            text-size-adjust: 100%;
-            -webkit-text-size-adjust: 100%;
-          }
-        }
-
-        /* Prevent selection on mobile */
-        .touch-button, 
-        .chatbot-header,
-        .chatbot-mobile-user-bar {
-          -webkit-user-select: none;
-          user-select: none;
-        }
-
-        /* High contrast mode support */
-        @media (prefers-contrast: high) {
-          .chatbot-input {
-            border: 1px solid currentColor;
-          }
-        }
-
-        /* Reduced motion support */
-        @media (prefers-reduced-motion: reduce) {
-          * {
-            animation-duration: 0.01ms !important;
-            animation-iteration-count: 1 !important;
-            transition-duration: 0.01ms !important;
-          }
-        }
-
-        /* REMOVED DARK MODE - Force light mode always */
-        /* No dark mode styles applied */
-
-        /* Print styles */
-        @media print {
-          .chatbot-input-wrapper,
-          .chatbot-header button {
-            display: none;
-          }
-        }
-
-        /* Landscape mobile optimization */
-        @media (max-height: 500px) and (orientation: landscape) {
-          .chatbot-header {
-            padding: 8px 16px;
-          }
-
-          .chatbot-mobile-user-bar {
-            padding: 4px 16px;
-          }
-        }
+        @media print { .chatbot-input-wrapper, .chatbot-header button { display: none; } }
       `}</style>
     </div>
   );

@@ -12,8 +12,7 @@ const ChatbotPage = () => {
   const [typingText, setTypingText] = useState('');
   const [fullResponse, setFullResponse] = useState('');
   const [followUpActions, setFollowUpActions] = useState([]);
-  const [autoScrollEnabled, setAutoScrollEnabled] = useState(true);
-
+  
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const typingIntervalRef = useRef(null);
@@ -22,7 +21,7 @@ const ChatbotPage = () => {
   const initialLoadRef = useRef(true);
   const sendTimeoutRef = useRef(null);
   
-  // --- NEW: Security Refs ---
+  // --- Security Refs ---
   const lastActivityRef = useRef(Date.now()); 
   const lastMessageTimeRef = useRef(0);       
 
@@ -37,38 +36,63 @@ const ChatbotPage = () => {
     "What about scholarships?"
   ];
 
-  // --- SECURITY 1: Strict Session Validation ---
+  // --- SECURITY 1: Smart Session Validation (Time-Based) ---
   useEffect(() => {
     try {
+      // 1. Get User Data
       const storedUser = localStorage.getItem('bitChatbotUser');
+      const storedTime = localStorage.getItem('bitChatbotLastActive');
+
       if (!storedUser) {
         window.location.href = '/';
         return;
       }
+
+      // 2. Check Time Expiry (10 Minutes)
+      const tenMinutes = 10 * 60 * 1000; 
+      const now = Date.now();
+      
+      // If time exists and is older than 10 mins, FORCE LOGOUT
+      if (storedTime && (now - parseInt(storedTime) > tenMinutes)) {
+        console.warn("Session expired due to inactivity.");
+        handleLogout();
+        return;
+      }
+
+      // 3. Parse Data
       const parsedUser = JSON.parse(storedUser);
       if (!parsedUser || !parsedUser.name || !parsedUser.email || !parsedUser.phone) {
         throw new Error("Corrupted or incomplete session data");
       }
+      
+      // 4. Update Time (Refresh Session) and Set Data
+      localStorage.setItem('bitChatbotLastActive', now.toString());
       setUserData(parsedUser);
+
     } catch (error) {
       console.error('Security Check Failed:', error);
-      localStorage.removeItem('bitChatbotUser'); 
-      window.location.href = '/'; 
+      handleLogout();
     }
   }, []);
 
-  // --- SECURITY 2: 10-Minute Inactivity Auto-Logout ---
+  // --- SECURITY 2: Active Monitoring & Auto-Logout ---
   useEffect(() => {
+    // Function to update the "Last Active" time in local storage
     const updateActivity = () => {
-      lastActivityRef.current = Date.now();
+      const now = Date.now();
+      lastActivityRef.current = now;
+      // We update localStorage so if they open a new tab or refresh, it knows they are active
+      localStorage.setItem('bitChatbotLastActive', now.toString());
     };
 
+    // Listen for any user interaction
     window.addEventListener('mousemove', updateActivity);
     window.addEventListener('keypress', updateActivity);
     window.addEventListener('click', updateActivity);
     window.addEventListener('scroll', updateActivity);
     window.addEventListener('touchstart', updateActivity);
 
+    // Check every 30 seconds if we need to logout
     const inactivityInterval = setInterval(() => {
       const now = Date.now();
       const tenMinutes = 10 * 60 * 1000; 
@@ -88,7 +112,7 @@ const ChatbotPage = () => {
     };
   }, []);
 
-  // Send login request when user data loads
+  // Send login request to backend when user data is ready
   useEffect(() => {
     if (userData && initialLoadRef.current) {
       initialLoadRef.current = false;
@@ -120,66 +144,40 @@ const ChatbotPage = () => {
     }
   }, [userData]);
 
-  // Scroll Handling
+  // --- SCROLL HANDLING ---
+  
+  // 1. Scroll to bottom when new messages arrive (Smooth)
   useEffect(() => {
-    const container = messagesContainerRef.current;
-    if (!container) return;
+    if (messagesEndRef.current) {
+        setTimeout(() => {
+            messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }, 100);
+    }
+  }, [messages, followUpActions]);
 
-    let lastScrollTop = container.scrollTop;
-    let scrollTimeout = null;
-
-    const handleScroll = () => {
-      if (isLoading && typingText) return;
-
-      if (scrollTimeout) clearTimeout(scrollTimeout);
-
-      scrollTimeout = setTimeout(() => {
-        const currentScrollTop = container.scrollTop;
+  // 2. Scroll while typing (Instant/Auto to prevent lag)
+  useEffect(() => {
+    if (typingText && messagesContainerRef.current) {
+        const container = messagesContainerRef.current;
         const scrollHeight = container.scrollHeight;
+        const scrollTop = container.scrollTop;
         const clientHeight = container.clientHeight;
-        const isAtBottom = scrollHeight - currentScrollTop - clientHeight < 50;
 
-        if (currentScrollTop < lastScrollTop) {
-          setAutoScrollEnabled(false);
-        } else if (isAtBottom) {
-          setAutoScrollEnabled(true);
+        const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
+
+        if (isNearBottom) {
+            container.scrollTop = scrollHeight;
         }
+    }
+  }, [typingText]);
 
-        lastScrollTop = currentScrollTop;
-      }, 50);
-    };
-
-    container.addEventListener('scroll', handleScroll, { passive: true });
-    return () => {
-      container.removeEventListener('scroll', handleScroll);
-      if (scrollTimeout) clearTimeout(scrollTimeout);
-    };
-  }, [isLoading, typingText]);
-
-  // Auto-scroll effect
-  useEffect(() => {
-    if (!autoScrollEnabled) return;
-
-    const scrollToBottom = () => {
-      if (messagesEndRef.current) {
-        messagesEndRef.current.scrollIntoView({ 
-          behavior: 'smooth', 
-          block: 'end',
-          inline: 'nearest'
-        });
-      }
-    };
-
-    const rafId = requestAnimationFrame(scrollToBottom);
-    return () => cancelAnimationFrame(rafId);
-  }, [messages, typingText, autoScrollEnabled]);
 
   const getRandomFollowUpActions = () => {
     const shuffled = [...allFollowUpActions].sort(() => 0.5 - Math.random());
     return shuffled.slice(0, 2);
   };
 
-  // --- UPDATED: Time-Based Typing Animation (Background Proof & Faster) ---
+  // --- Time-Based Typing Animation ---
   useEffect(() => {
     if (typingIntervalRef.current) {
       clearInterval(typingIntervalRef.current);
@@ -188,20 +186,17 @@ const ChatbotPage = () => {
 
     if (fullResponse && isLoading) {
       const startTime = Date.now();
-      const typingSpeed = 3; // Lower number = Faster typing (ms per char)
+      const typingSpeed = 3; 
       
       setTypingText('');
       
       typingIntervalRef.current = setInterval(() => {
-        // Calculate how many characters should be shown based on elapsed time
-        // This ensures if the tab is inactive (throttled), it jumps ahead correctly
         const elapsed = Date.now() - startTime;
         const charIndex = Math.floor(elapsed / typingSpeed);
         
         if (charIndex < fullResponse.length) {
           setTypingText(fullResponse.substring(0, charIndex + 1));
         } else {
-          // Animation Complete
           clearInterval(typingIntervalRef.current);
           typingIntervalRef.current = null;
           
@@ -216,7 +211,7 @@ const ChatbotPage = () => {
           setFullResponse('');
           setFollowUpActions(getRandomFollowUpActions());
         }
-      }, 10); // Update every 10ms (smoothness)
+      }, 10); 
     }
 
     return () => {
@@ -275,16 +270,10 @@ const ChatbotPage = () => {
     if (!inputRef.current) return;
     const textarea = inputRef.current;
     
-    textarea.style.height = '44px';
-    
-    const computed = window.getComputedStyle(textarea);
-    const paddingTop = parseFloat(computed.paddingTop);
-    const paddingBottom = parseFloat(computed.paddingBottom);
-    const borderTop = parseFloat(computed.borderTopWidth);
-    const borderBottom = parseFloat(computed.borderBottomWidth);
+    textarea.style.height = '44px'; // Base height
     
     const scrollHeight = textarea.scrollHeight;
-    const maxHeight = 128;
+    const maxHeight = 120; // Limit height on mobile
     const newHeight = Math.min(Math.max(scrollHeight, 44), maxHeight);
     
     textarea.style.height = newHeight + 'px';
@@ -295,7 +284,7 @@ const ChatbotPage = () => {
     const trimmedInput = messageText.trim();
     if (!trimmedInput || isLoading || !userData) return;
 
-    // --- SECURITY 3: Anti-Spam / Rate Limiting ---
+    // --- SECURITY 3: Anti-Spam ---
     const now = Date.now();
     if (now - lastMessageTimeRef.current < 1000) {
         return; 
@@ -306,6 +295,7 @@ const ChatbotPage = () => {
     isSendingRef.current = true;
 
     lastActivityRef.current = Date.now();
+    localStorage.setItem('bitChatbotLastActive', Date.now().toString()); // Update time on send
 
     const userMessage = {
       type: 'user',
@@ -320,6 +310,7 @@ const ChatbotPage = () => {
     if (inputRef.current) {
       inputRef.current.style.height = '44px';
       inputRef.current.style.overflowY = 'hidden';
+      inputRef.current.focus(); 
     }
 
     setIsLoading(true);
@@ -390,16 +381,19 @@ const ChatbotPage = () => {
 
   const handleInputFocus = () => {
     lastActivityRef.current = Date.now();
+    localStorage.setItem('bitChatbotLastActive', Date.now().toString());
     setTimeout(() => {
       if (messagesEndRef.current) {
-        messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
       }
-    }, 200);
+    }, 300);
   };
 
   const handleLogout = () => {
     try {
+      // CLEAR ALL LOCAL STORAGE CACHE
       localStorage.removeItem('bitChatbotUser');
+      localStorage.removeItem('bitChatbotLastActive');
     } catch (error) {
       console.error('Error removing user data:', error);
     }
@@ -429,10 +423,10 @@ const ChatbotPage = () => {
       
       {/* Fixed Header */}
       <header className="chatbot-header">
-        <div className="flex items-center justify-between max-w-4xl mx-auto">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between max-w-4xl mx-auto w-full">
+          <div className="flex items-center gap-3 overflow-hidden">
             <div className="relative flex-shrink-0">
-              <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shadow-lg overflow-hidden">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-white flex items-center justify-center shadow-lg overflow-hidden">
                 <img 
                   src={botIconUrl} 
                   alt="BIT Bot Icon" 
@@ -441,10 +435,10 @@ const ChatbotPage = () => {
                   decoding="async"
                 />
               </div>
-              <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-green-400 border-2 border-purple-900 rounded-full"></div>
+              <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 sm:w-3.5 sm:h-3.5 bg-green-400 border-2 border-purple-900 rounded-full"></div>
             </div>
-            <div>
-              <h1 className="text-lg font-bold text-white leading-tight">BIT AI Assistant</h1>
+            <div className="min-w-0">
+              <h1 className="text-base sm:text-lg font-bold text-white leading-tight truncate">BIT AI Assistant</h1>
               <p className="text-xs text-purple-200 leading-tight flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse flex-shrink-0"></span>
                 <span>Online now</span>
@@ -452,9 +446,9 @@ const ChatbotPage = () => {
             </div>
           </div>
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-shrink-0">
             {userData && (
-              <div className="hidden sm:block text-right mr-3">
+              <div className="hidden md:block text-right mr-3">
                 <p className="text-sm text-purple-200">
                   <span className="font-semibold text-white">{userData.name}</span>
                 </p>
@@ -464,41 +458,38 @@ const ChatbotPage = () => {
             
             <button
               onClick={handleLogout}
-              className="p-2.5 rounded-lg bg-purple-700 hover:bg-purple-600 transition-colors touch-button"
+              className="p-2 sm:p-2.5 rounded-lg bg-purple-700 hover:bg-purple-600 transition-colors touch-button active:scale-95"
               type="button"
               aria-label="Logout"
             >
-              <LogOut size={22} className="text-white" />
+              <LogOut size={20} className="text-white sm:w-[22px] sm:h-[22px]" />
             </button>
           </div>
         </div>
       </header>
 
-      {/* User Info Bar - Mobile */}
+      {/* User Info Bar - Mobile Only */}
       {userData && (
         <div className="chatbot-mobile-user-bar">
-          <p className="text-sm text-gray-600">
-            Welcome, <span className="font-semibold text-gray-800">{userData.name}</span>
-            <span className="mx-2">•</span>
-            <span className="capitalize">{userData.userType}</span>
+          <p className="text-xs sm:text-sm text-gray-600 truncate">
+            Hi, <span className="font-semibold text-gray-800">{userData.name}</span>
           </p>
         </div>
       )}
 
-      {/* Messages Area - Scrollable Container */}
+      {/* Messages Area */}
       <div 
         ref={messagesContainerRef}
         className="chatbot-messages-container"
       >
-        <div className="max-w-4xl mx-auto w-full flex flex-col gap-4 px-4 sm:px-6 py-4 pb-28"> 
-          {/* Increased bottom padding (pb-28) to prevent content being hidden behind floating input */}
+        <div className="max-w-4xl mx-auto w-full flex flex-col gap-4 px-3 sm:px-6 py-4 pb-32"> 
           
           {messages.map((message, index) => (
             <div 
               key={`${message.type}-${index}-${message.timestamp.getTime()}`}
               className={`flex items-end gap-2 sm:gap-3 animate-slideUp ${message.type === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
             >
-              <div className={`flex-shrink-0 w-9 h-9 rounded-full shadow-md ${
+              <div className={`flex-shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-full shadow-md ${
                 message.type === 'bot' 
                   ? 'bg-white overflow-hidden' 
                   : 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center text-sm font-bold'
@@ -516,8 +507,8 @@ const ChatbotPage = () => {
                 )}
               </div>
 
-              <div className={`flex flex-col max-w-[80%] sm:max-w-[75%] ${message.type === 'user' ? 'items-end' : 'items-start'}`}>
-                <div className={`px-4 py-3 rounded-2xl shadow-md ${
+              <div className={`flex flex-col max-w-[85%] sm:max-w-[75%] ${message.type === 'user' ? 'items-end' : 'items-start'}`}>
+                <div className={`px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-2xl shadow-md ${
                   message.type === 'user'
                     ? 'bg-gradient-to-br from-purple-600 to-purple-700 text-white rounded-br-md'
                     : 'bg-white text-gray-800 border border-gray-100 rounded-bl-md'
@@ -530,7 +521,7 @@ const ChatbotPage = () => {
                     )}
                   </div>
                 </div>
-                <span className="text-xs text-gray-400 mt-1 px-1">
+                <span className="text-[10px] sm:text-xs text-gray-400 mt-1 px-1">
                   {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </span>
               </div>
@@ -539,14 +530,14 @@ const ChatbotPage = () => {
 
           {/* Quick actions on first load */}
           {messages.length === 1 && !isLoading && (
-            <div className="flex flex-col gap-3 my-2 animate-slideUp">
-              <p className="text-sm text-gray-500 font-medium px-1">Quick actions:</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div className="flex flex-col gap-3 my-2 animate-slideUp px-1">
+              <p className="text-xs sm:text-sm text-gray-500 font-medium">Suggestion:</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
                 {quickActions.map((action, idx) => (
                   <button 
                     key={`quick-${idx}`} 
                     onClick={() => handleQuickAction(action)} 
-                    className="px-4 py-3 bg-white border-2 border-purple-200 rounded-xl text-sm font-medium text-purple-700 hover:border-purple-400 hover:bg-purple-50 active:scale-[0.98] transition-all text-left shadow-sm touch-button"
+                    className="px-4 py-3 bg-white border-2 border-purple-100 rounded-xl text-sm font-medium text-purple-700 hover:border-purple-400 hover:bg-purple-50 active:bg-purple-100 active:scale-[0.98] transition-all text-left shadow-sm touch-button"
                     disabled={isLoading}
                     type="button"
                   >
@@ -561,7 +552,7 @@ const ChatbotPage = () => {
           {/* Typing indicator */}
           {isLoading && (
             <div className="flex items-end gap-2 sm:gap-3 animate-slideUp">
-              <div className="flex-shrink-0 w-9 h-9 rounded-full bg-white shadow-md overflow-hidden">
+              <div className="flex-shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-white shadow-md overflow-hidden">
                 <img 
                   src={botIconUrl} 
                   alt="Bot" 
@@ -570,7 +561,7 @@ const ChatbotPage = () => {
                   decoding="async"
                 />
               </div>
-              <div className="flex flex-col items-start max-w-[80%] sm:max-w-[75%]">
+              <div className="flex flex-col items-start max-w-[85%] sm:max-w-[75%]">
                 {typingText ? (
                   <div className="bg-white border border-gray-100 px-4 py-3 rounded-2xl rounded-bl-md shadow-md">
                     <div className="text-[15px] leading-relaxed text-gray-800 break-words" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
@@ -579,9 +570,9 @@ const ChatbotPage = () => {
                     </div>
                   </div>
                 ) : (
-                  <div className="bg-white border border-gray-100 px-5 py-3.5 rounded-2xl rounded-bl-md shadow-md">
+                  <div className="bg-white border border-gray-100 px-4 py-3 rounded-2xl rounded-bl-md shadow-md">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-purple-700 animate-pulse-text">BIT AI Assistant is thinking</span>
+                      <span className="text-xs sm:text-sm font-medium text-purple-700 animate-pulse-text">AI is thinking</span>
                       <div className="flex gap-1">
                         <span className="w-1.5 h-1.5 bg-purple-600 rounded-full animate-thinking1"></span>
                         <span className="w-1.5 h-1.5 bg-purple-600 rounded-full animate-thinking2"></span>
@@ -596,13 +587,13 @@ const ChatbotPage = () => {
           
           {/* Follow-up actions */}
           {!isLoading && followUpActions.length > 0 && (
-            <div className="w-full animate-slideUp">
+            <div className="w-full animate-slideUp pl-10 sm:pl-12">
               <div className="flex flex-wrap gap-2">
                 {followUpActions.map((action, idx) => (
                   <button 
                     key={`followup-${idx}-${action}`} 
                     onClick={() => handleQuickAction(action)} 
-                    className="px-4 py-2 bg-purple-100 border border-purple-200 rounded-full text-sm font-medium text-purple-800 hover:bg-purple-200 active:scale-[0.98] transition-all shadow-sm touch-button"
+                    className="px-3 py-1.5 sm:px-4 sm:py-2 bg-purple-50 border border-purple-200 rounded-full text-xs sm:text-sm font-medium text-purple-800 hover:bg-purple-100 active:bg-purple-200 active:scale-[0.98] transition-all shadow-sm touch-button"
                     disabled={isLoading}
                     type="button"
                   >
@@ -619,8 +610,8 @@ const ChatbotPage = () => {
 
       {/* FLOATING Input Area */}
       <div className="chatbot-input-wrapper">
-        <div className="max-w-4xl mx-auto px-4">
-          <div className="bg-white rounded-[2rem] shadow-xl border border-gray-200 p-2 pl-4 flex items-end gap-2 backdrop-blur-sm bg-opacity-95">
+        <div className="max-w-4xl mx-auto px-3 sm:px-4">
+          <div className="bg-white/95 backdrop-blur-md rounded-[20px] sm:rounded-[2rem] shadow-[0_-4px_20px_-2px_rgba(0,0,0,0.1)] border border-gray-200 p-2 pl-3 sm:pl-4 flex items-end gap-2">
             <div className="flex-1 relative py-2">
               <textarea
                 ref={inputRef}
@@ -630,42 +621,44 @@ const ChatbotPage = () => {
                 onChange={handleInputChange}
                 onKeyDown={handleKeyPress}
                 onFocus={handleInputFocus}
-                placeholder={isLoading ? "BIT AI Assistant is typing..." : "Type your message..."}
+                placeholder={isLoading ? "AI is typing..." : "Message..."}
                 disabled={isLoading}
                 maxLength={500}
                 aria-label="Type your message"
                 autoComplete="off"
-                autoCorrect="off"
+                autoCorrect="on"
                 autoCapitalize="sentences"
                 spellCheck="true"
+                enterKeyHint="send" 
               />
             </div>
             
             <button 
               onClick={() => handleSendMessage()}
               disabled={!inputMessage.trim() || isLoading} 
-              className="flex-shrink-0 w-11 h-11 mb-1 mr-1 bg-gradient-to-r from-purple-600 to-purple-700 rounded-full flex items-center justify-center shadow-md hover:shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 touch-button"
+              className="flex-shrink-0 w-10 h-10 sm:w-11 sm:h-11 mb-1 mr-0.5 bg-gradient-to-r from-purple-600 to-purple-700 rounded-full flex items-center justify-center shadow-md hover:shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 touch-button"
               type="button"
               aria-label="Send message"
             >
-              <Send size={20} className="text-white ml-0.5" />
+              <Send size={18} className="text-white ml-0.5 sm:w-5 sm:h-5" />
             </button>
           </div>
-          <p className="text-[10px] text-gray-400 mt-2 text-center font-medium">
-            AI can make mistakes. Check important info.
+          <p className="text-[10px] text-gray-400 mt-2 text-center font-medium opacity-70">
+            AI can make mistakes. Verify important info.
           </p>
         </div>
       </div>
 
       <style>{`
-        /* Base container */
+        /* Base container with mobile height fix */
         .chatbot-container {
           position: fixed;
           inset: 0;
           display: flex;
           flex-direction: column;
-          height: 100dvh;
-          background: linear-gradient(to bottom, #f3e8ff, #ffffff) !important; /* Lighter background */
+          height: 100%; /* Fallback */
+          height: 100dvh; /* Mobile Viewport Height */
+          background: linear-gradient(to bottom, #f3e8ff, #ffffff) !important;
           font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
           overflow: hidden;
           -webkit-font-smoothing: antialiased;
@@ -680,7 +673,7 @@ const ChatbotPage = () => {
           left: 0;
           right: 0;
           z-index: 50;
-          padding: 12px 16px;
+          padding: 8px 12px;
           background: linear-gradient(to right, rgb(88, 28, 135), rgb(107, 33, 168), rgb(88, 28, 135));
           box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
           flex-shrink: 0;
@@ -695,15 +688,15 @@ const ChatbotPage = () => {
         /* Mobile user bar */
         .chatbot-mobile-user-bar {
           position: sticky;
-          top: 60px;
+          top: 56px;
           z-index: 40;
           background: white;
           border-bottom: 1px solid rgb(229, 231, 235);
-          padding: 8px 16px;
+          padding: 6px 12px;
           flex-shrink: 0;
         }
 
-        @media (min-width: 640px) {
+        @media (min-width: 768px) {
           .chatbot-mobile-user-bar {
             display: none;
           }
@@ -722,35 +715,36 @@ const ChatbotPage = () => {
           background: transparent !important;
         }
 
-        /* --- UPDATED: FLOATING INPUT WRAPPER --- */
+        /* Input Wrapper */
         .chatbot-input-wrapper {
           position: absolute; /* Floating */
           bottom: 0;
           left: 0;
           right: 0;
           z-index: 45;
-          padding-bottom: max(24px, env(safe-area-inset-bottom, 20px));
-          background: linear-gradient(to top, rgba(255,255,255,1) 60%, rgba(255,255,255,0)); /* Fade out effect */
-          pointer-events: none; /* Allow clicking through the fade area */
+          /* Critical for mobile: padding for home bar */
+          padding-bottom: max(16px, env(safe-area-inset-bottom, 16px));
+          background: linear-gradient(to top, rgba(255,255,255,1) 40%, rgba(255,255,255,0));
+          pointer-events: none;
         }
 
         .chatbot-input-wrapper > div {
-          pointer-events: auto; /* Re-enable clicks for the input box itself */
+          pointer-events: auto;
         }
 
-        /* Input field */
+        /* Input field - Force 16px to prevent iOS zoom */
         .chatbot-input {
           width: 100%;
           border: 0;
           padding: 0;
           background: transparent;
           color: rgb(31, 41, 55);
-          font-size: 16px;
+          font-size: 16px !important; /* Vital for iOS */
           outline: none;
           resize: none;
           line-height: 1.5;
           min-height: 24px;
-          max-height: 128px;
+          max-height: 120px;
           overflow-y: hidden;
           font-family: inherit;
         }
@@ -765,6 +759,7 @@ const ChatbotPage = () => {
           -webkit-tap-highlight-color: transparent;
           user-select: none;
           -webkit-user-select: none;
+          cursor: pointer;
         }
 
         /* Animations */
@@ -796,11 +791,11 @@ const ChatbotPage = () => {
         .animate-pulse-text { animation: pulseText 2s ease-in-out infinite; }
 
         /* Scrollbars */
-        .chatbot-messages-container::-webkit-scrollbar { width: 6px; }
+        .chatbot-messages-container::-webkit-scrollbar { width: 5px; }
         .chatbot-messages-container::-webkit-scrollbar-track { background: transparent; }
         .chatbot-messages-container::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 10px; }
         
-        button:active:not(:disabled) { transform: scale(0.95); }
+        button:active:not(:disabled) { transform: scale(0.96); }
         
         /* Link styles */
         .chatbot-messages-container a { word-break: break-all; overflow-wrap: anywhere; }

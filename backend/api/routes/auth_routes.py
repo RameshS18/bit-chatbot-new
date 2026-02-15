@@ -1,0 +1,22 @@
+from flask import Blueprint, request, jsonify
+from services.auth_service import AuthService
+
+auth_bp = Blueprint('auth', __name__)
+
+@auth_bp.route('/request-otp', methods=['POST'])
+def request_otp():
+    data = request.json
+    email = data.get('email')
+    response, status = AuthService.request_otp(email)
+    return jsonify(response), status
+
+@auth_bp.route('/login', methods=['POST'])
+def login():
+    data = request.json
+    response, status = AuthService.login_user(
+        data.get('email'), 
+        data.get('otp'), 
+        data.get('name'), 
+        data.get('phone')
+    )
+    return jsonify(response), status

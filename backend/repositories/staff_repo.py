@@ -1,5 +1,9 @@
 import sqlite3
+from datetime import datetime, timedelta
+import pytz
 from core.constants import DB_PATHS
+
+IST = pytz.timezone('Asia/Kolkata')
 
 class StaffRepository:
 
@@ -31,3 +35,75 @@ class StaffRepository:
         with sqlite3.connect(DB_PATHS["LOGS"]) as conn:
             conn.execute("INSERT INTO edit_logs (staff_id, timestamp, action_performed, document_name) VALUES (?, ?, ?, ?)",
                          (staff_id, timestamp, action, document_name))
+
+    # --- NEW METHODS FOR ADMIN DASHBOARD ---
+
+    @staticmethod
+    def get_staff_with_login():
+        """Returns all staff with their last login time."""
+        try:
+            with sqlite3.connect(DB_PATHS["STAFF"]) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.execute("""
+                    SELECT 
+                        s.staff_id, 
+                        s.staff_name, 
+                        MAX(sl.login_time) as last_login
+                    FROM staff_members s
+                    LEFT JOIN session_logs sl ON s.staff_id = sl.staff_id
+                    GROUP BY s.staff_id, s.staff_name
+                    ORDER BY s.staff_name ASC
+                """)
+                return [dict(row) for row in cursor.fetchall()]
+        except Exception as e:
+            print(f"Error fetching staff: {e}")
+            return []
+
+    @staticmethod
+    def get_detailed_logs(search_term, filter_period):
+        """Fetches logs with search and date filtering."""
+        try:
+            # We need to attach the staff database to the logs database to join them
+            conn = sqlite3.connect(DB_PATHS["LOGS"])
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            
+            # Attach Staff DB
+            cursor.execute("ATTACH DATABASE ? AS editor_staff", (DB_PATHS["STAFF"],))
+            
+            query = """
+                SELECT 
+                    el.log_id,
+                    el.timestamp,
+                    el.staff_id,
+                    es.staff_name,
+                    el.action_performed,
+                    el.document_name
+                FROM main.edit_logs el
+                LEFT JOIN editor_staff.staff_members es ON el.staff_id = es.staff_id
+                WHERE (IFNULL(es.staff_name, '') LIKE ? OR el.staff_id LIKE ?)
+            """
+            params = [f'%{search_term}%', f'%{search_term}%']
+            
+            # Date Logic
+            if filter_period == '10days':
+                cutoff = (datetime.now(IST) - timedelta(days=10)).isoformat()
+                query += " AND el.timestamp >= ?"
+                params.append(cutoff)
+            elif filter_period == '30days':
+                cutoff = (datetime.now(IST) - timedelta(days=30)).isoformat()
+                query += " AND el.timestamp >= ?"
+                params.append(cutoff)
+                
+            query += " ORDER BY el.timestamp DESC"
+            
+            cursor.execute(query, tuple(params))
+            logs = [dict(row) for row in cursor.fetchall()]
+            
+            # Detach and Close
+            cursor.execute("DETACH DATABASE editor_staff")
+            conn.close()
+            return logs
+        except Exception as e:
+            print(f"Error fetching logs: {e}")
+            return []

@@ -13,7 +13,9 @@ FAISS_INDEX_DIR = os.path.join(DATA_DIR, "faiss_index_google")
 # Google Credentials Files
 CLIENT_SECRET_FILE = os.path.join(BASE_DIR, "client_secret.json")
 TOKEN_FILE = os.path.join(BASE_DIR, "token.json")
-EMAIL_CONFIG_FILE = os.path.join(BASE_DIR, "department_emails.txt")
+
+# --- CORRECT PATH FOR EMAILS ---
+EMAIL_CONFIG_FILE = os.path.join(DATA_DIR, "department_emails.txt")
 
 # Ensure critical directories exist
 os.makedirs(DATABASE_DIR, exist_ok=True)
@@ -30,8 +32,6 @@ DB_PATHS = {
 }
 
 # --- AI Prompts ---
-# We store the prompts here so the logic code stays clean.
-
 CHATBOT_SYSTEM_PROMPT = """
 You are **BIT AI Assistant**, the official virtual assistant of **Bannari Amman Institute of Technology (BIT)**.
 Your primary goal is to be helpful, concise, and accurate. You must follow this strict logic flow:

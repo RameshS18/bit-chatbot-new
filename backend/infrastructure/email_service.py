@@ -59,10 +59,8 @@ class EmailService:
 
     @staticmethod
     def send_otp(to_email, otp):
-        """Sends an OTP email with the exact styling from the screenshot."""
+        """Sends an OTP email."""
         subject = "Your BITRA Chatbot Verification Code"
-        
-        # Exact HTML replication of your screenshot
         body = f"""
         <html>
         <head>
@@ -71,7 +69,6 @@ class EmailService:
                 .container {{ max-width: 600px; margin: 20px auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px; background-color: #ffffff; }}
                 .greeting {{ font-size: 24px; color: #333333; margin-bottom: 20px; font-weight: normal; }}
                 .text {{ font-size: 16px; color: #333333; line-height: 1.6; margin-bottom: 15px; }}
-                .highlight {{ background-color: #ffe082; padding: 2px 4px; border-radius: 2px; font-weight: 500; }}
                 .otp-box {{ background-color: #f5f5f5; padding: 30px; text-align: center; border-radius: 4px; margin: 30px 0; }}
                 .otp-code {{ font-size: 36px; font-weight: bold; color: #004a99; letter-spacing: 2px; }}
                 .footer {{ margin-top: 40px; color: #666666; font-size: 14px; line-height: 1.6; }}
@@ -80,27 +77,11 @@ class EmailService:
         <body>
             <div class="container">
                 <div class="greeting">Hello,</div>
-                
-                <div class="text">
-                    Thank you for verifying your email for the <strong>BITRA</strong> Chatbot.
-                </div>
-                
-                <div class="text">
-                    Your One-Time Password (OTP) is:
-                </div>
-                
-                <div class="otp-box">
-                    <span class="otp-code">{otp}</span>
-                </div>
-                
-                <div class="text">
-                    This code is valid for 10 minutes.
-                </div>
-                
-                <div class="footer">
-                    Best regards,<br>
-                    Bannari Amman Institute of Technology
-                </div>
+                <div class="text">Thank you for verifying your email for the <strong>BITRA</strong> Chatbot.</div>
+                <div class="text">Your One-Time Password (OTP) is:</div>
+                <div class="otp-box"><span class="otp-code">{otp}</span></div>
+                <div class="text">This code is valid for 10 minutes.</div>
+                <div class="footer">Best regards,<br>Bannari Amman Institute of Technology</div>
             </div>
         </body>
         </html>
@@ -109,16 +90,20 @@ class EmailService:
 
     @staticmethod
     def get_department_email(category):
-        """Reads department_emails.txt to find the right official."""
+        """
+        Reads department_emails.txt from DATA_DIR to find the right official.
+        This runs every time an email sends, so updates are instant.
+        """
         try:
             if os.path.exists(EMAIL_CONFIG_FILE):
                 with open(EMAIL_CONFIG_FILE, "r") as f:
                     for line in f:
                         if "=" in line:
                             key, value = line.strip().split("=")
-                            if key.lower() == category.lower():
-                                return value
-        except Exception:
+                            if key.lower().strip() == category.lower().strip():
+                                return value.strip()
+        except Exception as e:
+            print(f"Error reading email config: {e}")
             pass
         return Config.EMAIL_SENDER  # Fallback to Admin
 
@@ -138,4 +123,5 @@ class EmailService:
             <p><strong>Bot Response:</strong><br>{bot_response}</p>
         </div>
         """
+        print(f"Sending escalation to: {target_email} for category: {category}")
         return EmailService.send_email(target_email, subject, body)

@@ -1,0 +1,5 @@
+Admission=karthigam@bitsathy.ac.in
+Hostel=karthigam@bitsathy.ac.in
+Campus-Facility=karthigam@bitsathy.ac.in
+Placement=karthigam@bitsathy.ac.in
+General=karthigam@bitsathy.ac.in

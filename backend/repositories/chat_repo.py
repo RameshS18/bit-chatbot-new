@@ -14,9 +14,14 @@ class ChatRepository:
         except Exception as e:
             print(f"Error saving chat: {e}")
 
+    # --- NEW: Added for Admin Dashboard ---
     @staticmethod
     def get_all_chats():
-        with sqlite3.connect(DB_PATHS["CHATS"]) as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.execute("SELECT * FROM chat_history ORDER BY timestamp DESC")
-            return [dict(row) for row in cursor.fetchall()]
+        try:
+            with sqlite3.connect(DB_PATHS["CHATS"]) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.execute("SELECT * FROM chat_history ORDER BY timestamp DESC")
+                return [dict(row) for row in cursor.fetchall()]
+        except Exception as e:
+            print(f"Error fetching chats: {e}")
+            return []

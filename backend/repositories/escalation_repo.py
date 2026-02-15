@@ -16,10 +16,14 @@ class EscalationRepository:
 
     @staticmethod
     def get_all_escalated():
-        with sqlite3.connect(DB_PATHS["ESCALATION"]) as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.execute("SELECT * FROM escalated_queries ORDER BY timestamp DESC")
-            return [dict(row) for row in cursor.fetchall()]
+        try:
+            with sqlite3.connect(DB_PATHS["ESCALATION"]) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.execute("SELECT * FROM escalated_queries ORDER BY timestamp DESC")
+                return [dict(row) for row in cursor.fetchall()]
+        except Exception as e:
+            print(f"Error fetching escalations: {e}")
+            return []
 
     @staticmethod
     def update_status(query_id, status, remarks):
@@ -29,3 +33,15 @@ class EscalationRepository:
                 (status, remarks, query_id)
             )
             return cursor.rowcount > 0
+
+    # --- NEW: Fix for 'User Queries' Popup ---
+    @staticmethod
+    def get_escalations_by_email(email):
+        try:
+            with sqlite3.connect(DB_PATHS["ESCALATION"]) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.execute("SELECT * FROM escalated_queries WHERE email = ? ORDER BY timestamp DESC", (email,))
+                return [dict(row) for row in cursor.fetchall()]
+        except Exception as e:
+            print(f"Error fetching user queries: {e}")
+            return []

@@ -11,7 +11,7 @@ class LLMClient:
     """
     
     def __init__(self, retriever):
-        self.llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.3)
+        self.llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash-lite", temperature=0.3)
         self.retriever = retriever
         
         # Build chains (Safe initialization)

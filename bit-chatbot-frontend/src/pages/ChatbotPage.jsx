@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, LogOut } from 'lucide-react'; 
+import { Send, LogOut } from 'lucide-react';
 import DOMPurify from 'dompurify';
 
 const botIconUrl = '/images/new svg.svg';
@@ -12,7 +12,7 @@ const ChatbotPage = () => {
   const [typingText, setTypingText] = useState('');
   const [fullResponse, setFullResponse] = useState('');
   const [followUpActions, setFollowUpActions] = useState([]);
-  
+
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const typingIntervalRef = useRef(null);
@@ -20,10 +20,12 @@ const ChatbotPage = () => {
   const isSendingRef = useRef(false);
   const initialLoadRef = useRef(true);
   const sendTimeoutRef = useRef(null);
-  
+  // Holds the formatted HTML of completed lines during typing
+  const formattedTypingHtmlRef = useRef('');
+
   // --- Security Refs ---
-  const lastActivityRef = useRef(Date.now()); 
-  const lastMessageTimeRef = useRef(0);       
+  const lastActivityRef = useRef(Date.now());
+  const lastMessageTimeRef = useRef(0);
 
   const allFollowUpActions = [
     "Tell me more about placements",
@@ -49,9 +51,9 @@ const ChatbotPage = () => {
       }
 
       // 2. Check Time Expiry (10 Minutes)
-      const tenMinutes = 10 * 60 * 1000; 
+      const tenMinutes = 10 * 60 * 1000;
       const now = Date.now();
-      
+
       // If time exists and is older than 10 mins, FORCE LOGOUT
       if (storedTime && (now - parseInt(storedTime) > tenMinutes)) {
         console.warn("Session expired due to inactivity.");
@@ -64,7 +66,7 @@ const ChatbotPage = () => {
       if (!parsedUser || !parsedUser.name || !parsedUser.email || !parsedUser.phone) {
         throw new Error("Corrupted or incomplete session data");
       }
-      
+
       // 4. Update Time (Refresh Session) and Set Data
       localStorage.setItem('bitChatbotLastActive', now.toString());
       setUserData(parsedUser);
@@ -95,12 +97,12 @@ const ChatbotPage = () => {
     // Check every 30 seconds if we need to logout
     const inactivityInterval = setInterval(() => {
       const now = Date.now();
-      const tenMinutes = 10 * 60 * 1000; 
+      const tenMinutes = 10 * 60 * 1000;
 
       if (now - lastActivityRef.current > tenMinutes) {
         handleLogout();
       }
-    }, 30000); 
+    }, 30000);
 
     return () => {
       window.removeEventListener('mousemove', updateActivity);
@@ -145,32 +147,63 @@ const ChatbotPage = () => {
   }, [userData]);
 
   // --- SCROLL HANDLING ---
-  
-  // 1. Scroll to bottom when new messages arrive (Smooth)
+  const isAutoScrollEnabledRef = useRef(true);
+  const scrollDebounceRef = useRef(null);
+
+  // Called the INSTANT user touches/clicks/wheels - kills auto-scroll immediately
+  const handleUserScrollStart = () => {
+    isAutoScrollEnabledRef.current = false;
+    if (scrollDebounceRef.current) clearTimeout(scrollDebounceRef.current);
+  };
+
+  // Fires continuously during scroll - debounced so we only check position
+  // AFTER user has completely stopped scrolling (150ms of silence)
+  const handleScroll = () => {
+    if (!messagesContainerRef.current) return;
+    if (scrollDebounceRef.current) clearTimeout(scrollDebounceRef.current);
+    scrollDebounceRef.current = setTimeout(() => {
+      if (!messagesContainerRef.current) return;
+      const container = messagesContainerRef.current;
+      const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 30;
+      if (isAtBottom) {
+        isAutoScrollEnabledRef.current = true;
+      }
+    }, 150);
+  };
+
+  // Smooth scroll down (only used for message arrival / message sent events)
+  const scrollToBottomSmooth = () => {
+    if (!messagesContainerRef.current || !isAutoScrollEnabledRef.current) return;
+    messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+  };
+
+  // Instant scroll down (used during typing animation to prevent jitter/shaking)
+  const scrollToBottomInstant = () => {
+    if (!messagesContainerRef.current || !isAutoScrollEnabledRef.current) return;
+    messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+  };
+
+  // Force scroll (ignores the auto-scroll flag, used when user actively sends a message)
+  const forceScrollToBottom = () => {
+    if (!messagesContainerRef.current) return;
+    isAutoScrollEnabledRef.current = true;
+    messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+  };
+
+  // Scroll when completed messages arrive
   useEffect(() => {
-    if (messagesEndRef.current) {
-        setTimeout(() => {
-            messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
-        }, 100);
+    const isLastMessageFromUser = messages.length > 0 && messages[messages.length - 1].type === 'user';
+    if (isLastMessageFromUser) {
+      // User just sent a message - force scroll and re-enable auto-scroll
+      forceScrollToBottom();
+    } else {
+      // Bot message completed - scroll to bottom if auto-scroll is on
+      scrollToBottomSmooth();
     }
   }, [messages, followUpActions]);
 
-  // 2. Scroll while typing (Instant/Auto to prevent lag)
-  useEffect(() => {
-    if (typingText && messagesContainerRef.current) {
-        const container = messagesContainerRef.current;
-        const scrollHeight = container.scrollHeight;
-        const scrollTop = container.scrollTop;
-        const clientHeight = container.clientHeight;
-
-        const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
-
-        if (isNearBottom) {
-            container.scrollTop = scrollHeight;
-        }
-    }
-  }, [typingText]);
-
+  // NOTE: No useEffect on typingText here - scrolling during typing is handled
+  // directly inside the setInterval below to prevent shake/jitter.
 
   const getRandomFollowUpActions = () => {
     const shuffled = [...allFollowUpActions].sort(() => 0.5 - Math.random());
@@ -186,23 +219,36 @@ const ChatbotPage = () => {
 
     if (fullResponse && isLoading) {
       const startTime = Date.now();
-      const typingSpeed = 3; 
-      
+      const typingSpeed = 3;
+
       setTypingText('');
-      
+
       typingIntervalRef.current = setInterval(() => {
         const elapsed = Date.now() - startTime;
         const charIndex = Math.floor(elapsed / typingSpeed);
-        
+
         if (charIndex < fullResponse.length) {
-          setTypingText(fullResponse.substring(0, charIndex + 1));
+          const newText = fullResponse.substring(0, charIndex + 1);
+          const char = fullResponse[charIndex];
+          setTypingText(newText);
+
+          // When a full line completes, format all completed lines immediately
+          if (char === '\n') {
+            const lines = newText.split('\n');
+            const completedLines = lines.slice(0, -1); // exclude the new empty last entry
+            formattedTypingHtmlRef.current = formatBotMessage(completedLines.join('\n'));
+          }
+
+          scrollToBottomInstant();
         } else {
           clearInterval(typingIntervalRef.current);
           typingIntervalRef.current = null;
-          
-          setMessages(prev => [...prev, { 
+          formattedTypingHtmlRef.current = '';
+
+          // Apply rich formatting ONLY when the response is complete, not during typing
+          setMessages(prev => [...prev, {
             type: 'bot',
-            text: fullResponse,
+            text: formatBotMessage(fullResponse),
             isHtml: true,
             timestamp: new Date()
           }]);
@@ -211,7 +257,7 @@ const ChatbotPage = () => {
           setFullResponse('');
           setFollowUpActions(getRandomFollowUpActions());
         }
-      }, 10); 
+      }, 10);
     }
 
     return () => {
@@ -234,48 +280,100 @@ const ChatbotPage = () => {
   }, []);
 
   const formatBotMessage = (text) => {
-    const preSanitized = DOMPurify.sanitize(text, {
-      ALLOWED_TAGS: [],
-      ALLOWED_ATTR: []
-    });
+    // Step 1: Strip all HTML
+    const preSanitized = DOMPurify.sanitize(text, { ALLOWED_TAGS: [], ALLOWED_ATTR: [] });
 
-    let formatted = preSanitized
-      .replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-purple-900">$1</strong>')
-      .replace(/^\* /gm, '• ')
-      .replace(/\n\* /g, '\n• ')
-      .replace(/\n/g, '<br />')
-      .replace(/•/g, '<span class="text-purple-600">•</span>');
-    
-    formatted = formatted.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (match, text, url) => {
-      const urlPattern = /^https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)$/;
-      if (urlPattern.test(url)) {
-        const safeUrl = encodeURI(url);
-        const safeText = DOMPurify.sanitize(text, { ALLOWED_TAGS: [], ALLOWED_ATTR: [] });
-        return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="text-purple-600 font-semibold underline hover:text-purple-800 transition-colors break-all">${safeText}</a>`;
+    // Inline formatter: bold, italic, links
+    const applyInline = (str) => str
+      .replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold text-gray-900">$1</strong>')
+      .replace(/_(.*?)_/g, '<em class="italic text-gray-600">$1</em>')
+      .replace(/\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g, (_, txt, url) =>
+        `<a href="${encodeURI(url)}" target="_blank" rel="noopener noreferrer" class="text-purple-600 font-medium underline underline-offset-2 hover:text-purple-800 transition-colors break-all">${txt}</a>`
+      );
+
+    const lines = preSanitized.split('\n');
+    let html = '';
+    let inList = false;
+
+    const closeList = () => {
+      if (inList) { html += '</ul>'; inList = false; }
+    };
+
+    for (let i = 0; i < lines.length; i++) {
+      const raw = lines[i];
+      const trimmed = raw.trim();
+
+      // Horizontal rule
+      if (/^-{3,}$/.test(trimmed)) {
+        closeList();
+        html += '<hr class="border-t border-gray-200 my-4" />';
+        continue;
       }
-      return DOMPurify.sanitize(text, { ALLOWED_TAGS: [], ALLOWED_ATTR: [] });
-    });
-    
-    const sanitized = DOMPurify.sanitize(formatted, {
-      ALLOWED_TAGS: ['strong', 'br', 'span', 'a'],
+
+      // ### Heading 3 — left accent bar, purple
+      if (/^#{3}\s+/.test(trimmed)) {
+        closeList();
+        const content = applyInline(trimmed.replace(/^#{3}\s+/, ''));
+        html += `<h3 class="text-[15px] font-bold text-purple-800 mt-5 mb-2 pl-2 border-l-4 border-purple-400">${content}</h3>`;
+        continue;
+      }
+
+      // ## Heading 2
+      if (/^#{2}\s+/.test(trimmed)) {
+        closeList();
+        const content = applyInline(trimmed.replace(/^#{2}\s+/, ''));
+        html += `<h2 class="text-base font-bold text-purple-900 mt-5 mb-2 pl-2 border-l-4 border-purple-500">${content}</h2>`;
+        continue;
+      }
+
+      // # Heading 1
+      if (/^#\s+/.test(trimmed)) {
+        closeList();
+        const content = applyInline(trimmed.replace(/^#\s+/, ''));
+        html += `<h1 class="text-lg font-bold text-purple-900 mt-5 mb-2 pl-2 border-l-4 border-purple-600">${content}</h1>`;
+        continue;
+      }
+
+      // Bullet items — catches `* `, `- `, and any leading whitespace before them
+      if (/^[\s]*[\*\-]\s+/.test(raw) && trimmed !== '-') {
+        if (!inList) { html += '<ul class="mt-2 mb-3 space-y-2 pl-1">'; inList = true; }
+        const content = applyInline(trimmed.replace(/^[\*\-]\s+/, ''));
+        html += `<li class="flex items-start gap-2.5"><span class="mt-[7px] w-[6px] h-[6px] rounded-full bg-purple-400 flex-shrink-0"></span><span class="text-gray-800 leading-relaxed">${content}</span></li>`;
+        continue;
+      }
+
+      // Blank line
+      if (trimmed === '') {
+        closeList();
+        html += '<div class="h-3"></div>';
+        continue;
+      }
+
+      // Regular text
+      closeList();
+      html += `<p class="text-gray-800 leading-relaxed mb-1">${applyInline(trimmed)}</p>`;
+    }
+
+    closeList();
+
+    return DOMPurify.sanitize(html, {
+      ALLOWED_TAGS: ['strong', 'em', 'br', 'span', 'a', 'h1', 'h2', 'h3', 'ul', 'li', 'p', 'hr', 'div'],
       ALLOWED_ATTR: ['class', 'href', 'target', 'rel'],
       ALLOW_DATA_ATTR: false,
       ALLOWED_URI_REGEXP: /^https?:\/\//
     });
-    
-    return sanitized;
   };
 
   const adjustTextareaHeight = () => {
     if (!inputRef.current) return;
     const textarea = inputRef.current;
-    
+
     textarea.style.height = '44px'; // Base height
-    
+
     const scrollHeight = textarea.scrollHeight;
     const maxHeight = 120; // Limit height on mobile
     const newHeight = Math.min(Math.max(scrollHeight, 44), maxHeight);
-    
+
     textarea.style.height = newHeight + 'px';
     textarea.style.overflowY = (scrollHeight > maxHeight) ? 'auto' : 'hidden';
   };
@@ -287,7 +385,7 @@ const ChatbotPage = () => {
     // --- SECURITY 3: Anti-Spam ---
     const now = Date.now();
     if (now - lastMessageTimeRef.current < 1000) {
-        return; 
+      return;
     }
     lastMessageTimeRef.current = now;
 
@@ -306,11 +404,11 @@ const ChatbotPage = () => {
     setMessages(prev => [...prev, userMessage]);
     setInputMessage('');
     setFollowUpActions([]);
-    
+
     if (inputRef.current) {
       inputRef.current.style.height = '44px';
       inputRef.current.style.overflowY = 'hidden';
-      inputRef.current.focus(); 
+      inputRef.current.focus();
     }
 
     setIsLoading(true);
@@ -337,8 +435,8 @@ const ChatbotPage = () => {
       const data = await response.json();
 
       if (response.ok && data.answer) {
-        const formattedResponse = formatBotMessage(data.answer);
-        setFullResponse(formattedResponse);
+        // Store RAW text - formatting runs only when typing finishes to prevent layout shifts
+        setFullResponse(data.answer);
       } else {
         setFullResponse("Sorry, something went wrong. Please try again.");
         setIsLoading(false);
@@ -366,7 +464,7 @@ const ChatbotPage = () => {
   };
 
   const handleInputChange = (e) => {
-    lastActivityRef.current = Date.now(); 
+    lastActivityRef.current = Date.now();
     if (e.target.value.length <= 500) {
       setInputMessage(e.target.value);
       requestAnimationFrame(() => adjustTextareaHeight());
@@ -383,9 +481,7 @@ const ChatbotPage = () => {
     lastActivityRef.current = Date.now();
     localStorage.setItem('bitChatbotLastActive', Date.now().toString());
     setTimeout(() => {
-      if (messagesEndRef.current) {
-        messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
-      }
+      scrollToBottomIfNear();
     }, 300);
   };
 
@@ -420,16 +516,16 @@ const ChatbotPage = () => {
 
   return (
     <div className="chatbot-container">
-      
+
       {/* Fixed Header */}
       <header className="chatbot-header">
         <div className="flex items-center justify-between max-w-4xl mx-auto w-full">
           <div className="flex items-center gap-3 overflow-hidden">
             <div className="relative flex-shrink-0">
               <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-white flex items-center justify-center shadow-lg overflow-hidden">
-                <img 
-                  src={botIconUrl} 
-                  alt="BIT Bot Icon" 
+                <img
+                  src={botIconUrl}
+                  alt="BIT Bot Icon"
                   className="w-full h-full object-cover"
                   loading="eager"
                   decoding="async"
@@ -445,7 +541,7 @@ const ChatbotPage = () => {
               </p>
             </div>
           </div>
-          
+
           <div className="flex items-center gap-2 flex-shrink-0">
             {userData && (
               <div className="hidden md:block text-right mr-3">
@@ -455,7 +551,7 @@ const ChatbotPage = () => {
                 <p className="text-xs text-purple-300 capitalize">{userData.userType}</p>
               </div>
             )}
-            
+
             <button
               onClick={handleLogout}
               className="p-2 sm:p-2.5 rounded-lg bg-purple-700 hover:bg-purple-600 transition-colors touch-button active:scale-95"
@@ -478,26 +574,29 @@ const ChatbotPage = () => {
       )}
 
       {/* Messages Area */}
-      <div 
+      <div
         ref={messagesContainerRef}
+        onScroll={handleScroll}
+        onPointerDown={handleUserScrollStart}
+        onTouchStart={handleUserScrollStart}
+        onWheel={handleUserScrollStart}
         className="chatbot-messages-container"
       >
-        <div className="max-w-4xl mx-auto w-full flex flex-col gap-4 px-3 sm:px-6 py-4 pb-32"> 
-          
+        <div className="max-w-4xl mx-auto w-full flex flex-col gap-4 px-3 sm:px-6 py-4 pb-48">
+
           {messages.map((message, index) => (
-            <div 
+            <div
               key={`${message.type}-${index}-${message.timestamp.getTime()}`}
               className={`flex items-end gap-2 sm:gap-3 animate-slideUp ${message.type === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
             >
-              <div className={`flex-shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-full shadow-md ${
-                message.type === 'bot' 
-                  ? 'bg-white overflow-hidden' 
-                  : 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center text-sm font-bold'
-              }`}>
+              <div className={`flex-shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-full shadow-md ${message.type === 'bot'
+                ? 'bg-white overflow-hidden'
+                : 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center text-sm font-bold'
+                }`}>
                 {message.type === 'bot' ? (
-                  <img 
-                    src={botIconUrl} 
-                    alt="Bot" 
+                  <img
+                    src={botIconUrl}
+                    alt="Bot"
                     className="w-full h-full object-cover"
                     loading="lazy"
                     decoding="async"
@@ -508,11 +607,10 @@ const ChatbotPage = () => {
               </div>
 
               <div className={`flex flex-col max-w-[85%] sm:max-w-[75%] ${message.type === 'user' ? 'items-end' : 'items-start'}`}>
-                <div className={`px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-2xl shadow-md ${
-                  message.type === 'user'
-                    ? 'bg-gradient-to-br from-purple-600 to-purple-700 text-white rounded-br-md'
-                    : 'bg-white text-gray-800 border border-gray-100 rounded-bl-md'
-                }`}>
+                <div className={`px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-2xl shadow-md ${message.type === 'user'
+                  ? 'bg-gradient-to-br from-purple-600 to-purple-700 text-white rounded-br-md'
+                  : 'bg-white text-gray-800 border border-gray-100 rounded-bl-md'
+                  }`}>
                   <div className="text-[15px] leading-relaxed break-words" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
                     {message.isHtml ? (
                       <div dangerouslySetInnerHTML={{ __html: message.text }} />
@@ -534,9 +632,9 @@ const ChatbotPage = () => {
               <p className="text-xs sm:text-sm text-gray-500 font-medium">Suggestion:</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
                 {quickActions.map((action, idx) => (
-                  <button 
-                    key={`quick-${idx}`} 
-                    onClick={() => handleQuickAction(action)} 
+                  <button
+                    key={`quick-${idx}`}
+                    onClick={() => handleQuickAction(action)}
                     className="px-4 py-3 bg-white border-2 border-purple-100 rounded-xl text-sm font-medium text-purple-700 hover:border-purple-400 hover:bg-purple-50 active:bg-purple-100 active:scale-[0.98] transition-all text-left shadow-sm touch-button"
                     disabled={isLoading}
                     type="button"
@@ -548,14 +646,14 @@ const ChatbotPage = () => {
               </div>
             </div>
           )}
-          
+
           {/* Typing indicator */}
           {isLoading && (
             <div className="flex items-end gap-2 sm:gap-3 animate-slideUp">
               <div className="flex-shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-white shadow-md overflow-hidden">
-                <img 
-                  src={botIconUrl} 
-                  alt="Bot" 
+                <img
+                  src={botIconUrl}
+                  alt="Bot"
                   className="w-full h-full object-cover"
                   loading="lazy"
                   decoding="async"
@@ -565,8 +663,12 @@ const ChatbotPage = () => {
                 {typingText ? (
                   <div className="bg-white border border-gray-100 px-4 py-3 rounded-2xl rounded-bl-md shadow-md">
                     <div className="text-[15px] leading-relaxed text-gray-800 break-words" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
-                      <div dangerouslySetInnerHTML={{ __html: typingText }} />
-                      <span className="inline-block w-0.5 h-4 bg-purple-600 ml-1 animate-blink"></span>
+                      {/* Formatted completed lines */}
+                      {formattedTypingHtmlRef.current && (
+                        <div dangerouslySetInnerHTML={{ __html: formattedTypingHtmlRef.current }} />
+                      )}
+                      {/* Current in-progress line — plain text, no layout shift */}
+                      <span className="whitespace-pre-wrap">{typingText.split('\n').pop()}</span>
                     </div>
                   </div>
                 ) : (
@@ -584,15 +686,15 @@ const ChatbotPage = () => {
               </div>
             </div>
           )}
-          
+
           {/* Follow-up actions */}
           {!isLoading && followUpActions.length > 0 && (
             <div className="w-full animate-slideUp pl-10 sm:pl-12">
               <div className="flex flex-wrap gap-2">
                 {followUpActions.map((action, idx) => (
-                  <button 
-                    key={`followup-${idx}-${action}`} 
-                    onClick={() => handleQuickAction(action)} 
+                  <button
+                    key={`followup-${idx}-${action}`}
+                    onClick={() => handleQuickAction(action)}
                     className="px-3 py-1.5 sm:px-4 sm:py-2 bg-purple-50 border border-purple-200 rounded-full text-xs sm:text-sm font-medium text-purple-800 hover:bg-purple-100 active:bg-purple-200 active:scale-[0.98] transition-all shadow-sm touch-button"
                     disabled={isLoading}
                     type="button"
@@ -603,7 +705,7 @@ const ChatbotPage = () => {
               </div>
             </div>
           )}
-          
+
           <div ref={messagesEndRef} style={{ height: '1px' }} aria-hidden="true" />
         </div>
       </div>
@@ -629,13 +731,13 @@ const ChatbotPage = () => {
                 autoCorrect="on"
                 autoCapitalize="sentences"
                 spellCheck="true"
-                enterKeyHint="send" 
+                enterKeyHint="send"
               />
             </div>
-            
-            <button 
+
+            <button
               onClick={() => handleSendMessage()}
-              disabled={!inputMessage.trim() || isLoading} 
+              disabled={!inputMessage.trim() || isLoading}
               className="flex-shrink-0 w-10 h-10 sm:w-11 sm:h-11 mb-1 mr-0.5 bg-gradient-to-r from-purple-600 to-purple-700 rounded-full flex items-center justify-center shadow-md hover:shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 touch-button"
               type="button"
               aria-label="Send message"

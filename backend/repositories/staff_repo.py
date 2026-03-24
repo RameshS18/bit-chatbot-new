@@ -12,7 +12,9 @@ class StaffRepository:
         with sqlite3.connect(DB_PATHS["STAFF"]) as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.execute("SELECT * FROM staff_members WHERE staff_id = ?", (staff_id,))
-            return dict(cursor.fetchone()) if cursor.fetchone() else None
+            row = cursor.fetchone()
+            return dict(row) if row else None
+            # return dict(cursor.fetchone()) if cursor.fetchone() else None
 
     @staticmethod
     def create_staff(staff_id, staff_name):

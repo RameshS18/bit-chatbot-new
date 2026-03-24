@@ -35,3 +35,11 @@ if you stop the backend then
 again "cd .." to bit-chatbot-new
 
 then -> sudo systemctl start bit-backend.service
+
+
+
+
+
+
+monitor traffic
+ sudo journalctl -u bit-backend.service -f

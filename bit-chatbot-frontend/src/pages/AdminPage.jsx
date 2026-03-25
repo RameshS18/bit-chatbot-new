@@ -46,7 +46,7 @@ const ChatHistoryModal = ({ onClose }) => {
     return chats.filter(chat => {
       const matchesSearch = 
         (chat.user_name && chat.user_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (chat.email && chat.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        // (chat.email && chat.email.toLowerCase().includes(searchTerm.toLowerCase())) || // [COMMENTED OUT] Email no longer collected
         (chat.user_query && chat.user_query.toLowerCase().includes(searchTerm.toLowerCase()))
       
       const matchesCategory = categoryFilter === 'All' || (chat.category && chat.category === categoryFilter)
@@ -55,14 +55,14 @@ const ChatHistoryModal = ({ onClose }) => {
   }, [chats, searchTerm, categoryFilter])
 
   const handleDownload = () => {
-    const headers = ['Timestamp', 'Category', 'User Name', 'Email', 'Phone', 'Query', 'Response']
+    const headers = ['Timestamp', 'Category', 'User Name', 'Phone', 'Query', 'Response']  // [MODIFIED] Email removed
     const csvContent = [
       headers.join(','),
       ...filteredChats.map(row => [
         `"${row.timestamp}"`,
         `"${row.category || 'General'}"`,
         `"${row.user_name || ''}"`,
-        `"${row.email || ''}"`,
+        // `"${row.email || ''}"`, // [COMMENTED OUT] Email no longer collected
         `"${row.phone_number || ''}"`,
         `"${row.user_query.replace(/"/g, '""')}"`,
         `"${row.bot_response.replace(/"/g, '""')}"`
@@ -151,7 +151,7 @@ const ChatHistoryModal = ({ onClose }) => {
                     </td>
                     <td className="px-6 py-4">
                       <div className="font-semibold text-gray-900">{chat.user_name || 'Anonymous'}</div>
-                      <div className="text-xs text-gray-500">{chat.email}</div>
+                      {/* <div className="text-xs text-gray-500">{chat.email}</div> */}{/* [COMMENTED OUT] Email no longer collected */}
                     </td>
                     <td className="px-6 py-4"><div className="max-h-24 overflow-y-auto">{chat.user_query}</div></td>
                     <td className="px-6 py-4 bg-gray-50/50"><div className="max-h-24 overflow-y-auto italic text-xs text-gray-600">{chat.bot_response}</div></td>
@@ -176,12 +176,12 @@ const UserQueriesModal = ({ user, onClose, onResolve, onBack, mode = 'escalated'
 
   useEffect(() => {
     fetchUserQueries()
-  }, [user.email])
+  }, [user.phone_number])
 
   const fetchUserQueries = async () => {
     const isSolvedMode = mode === 'solved'
     try {
-      const response = await axios.get(`/api/admin/user-queries/${encodeURIComponent(user.email)}`)
+      const response = await axios.get(`/api/admin/user-queries/${encodeURIComponent(user.phone_number)}`)
       let fetchedQueries = response.data
       if (isSolvedMode) {
         fetchedQueries = fetchedQueries.filter(q => q.status === 'Finished')
@@ -226,7 +226,7 @@ const UserQueriesModal = ({ user, onClose, onResolve, onBack, mode = 'escalated'
             )}
             <div>
               <h3 className="text-2xl font-bold text-white">{isSolved ? 'Solved Queries' : 'Escalated Queries'}</h3>
-              <p className="text-white/80 text-sm">{user.user_name} ({user.email})</p>
+              <p className="text-white/80 text-sm">{user.user_name}</p>  {/* [MODIFIED] Email removed */}
             </div>
           </div>
           <button onClick={onClose} className="text-white hover:bg-white/20 rounded-full p-2"><X size={24} /></button>
@@ -314,7 +314,7 @@ const UserDetailsModal = ({ user, onClose }) => {
             <div><h4 className="text-2xl font-bold text-gray-800">{user.user_name}</h4><p className="text-gray-600">ID: #{user.id}</p></div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-gray-50 rounded p-4"><p className="text-sm font-semibold text-gray-600">Email</p><p className="text-gray-800">{user.email}</p></div>
+            {/* <div className="bg-gray-50 rounded p-4"><p className="text-sm font-semibold text-gray-600">Email</p><p className="text-gray-800">{user.email}</p></div> */}{/* [COMMENTED OUT] Email no longer collected */}
             <div className="bg-gray-50 rounded p-4"><p className="text-sm font-semibold text-gray-600">Phone</p><p className="text-gray-800">{user.phone_number || 'N/A'}</p></div>
             <div className="bg-gray-50 rounded p-4"><p className="text-sm font-semibold text-gray-600">First Seen</p><p className="text-gray-800">{new Date(user.first_seen).toLocaleString()}</p></div>
             <div className="bg-gray-50 rounded p-4"><p className="text-sm font-semibold text-gray-600">Last Seen</p><p className="text-gray-800">{new Date(user.last_seen).toLocaleString()}</p></div>
@@ -345,10 +345,10 @@ const EscalatedUsersModal = ({ onClose, onUserSelect }) => {
           {loading ? <div className="py-12"><Spinner borderColor="border-red-600"/></div> : users.length === 0 ? <div className="text-center py-12 text-gray-500">No users found</div> : (
             <div className="space-y-3">
               {users.map(user => (
-                <div key={user.email} onClick={() => onUserSelect(user)} className="bg-gray-50 hover:bg-red-50 p-4 rounded-lg cursor-pointer border-l-4 border-red-500 hover:shadow-md flex justify-between items-center group transition-all">
+                <div key={user.phone_number || user.user_name} onClick={() => onUserSelect(user)} className="bg-gray-50 hover:bg-red-50 p-4 rounded-lg cursor-pointer border-l-4 border-red-500 hover:shadow-md flex justify-between items-center group transition-all">
                   <div>
                     <p className="text-lg font-semibold text-gray-800 group-hover:text-red-700">{user.user_name}</p>
-                    <p className="text-sm text-gray-600">{user.email}</p>
+                    {/* <p className="text-sm text-gray-600">{user.email}</p> */}{/* [COMMENTED OUT] Email no longer collected */}
                   </div>
                   <div className="flex items-center gap-4">
                      <div className="text-right"><p className="text-2xl font-bold text-red-600">{user.query_count}</p><p className="text-xs text-gray-500">Queries</p></div>
@@ -384,10 +384,10 @@ const SolvedUsersModal = ({ onClose, onUserSelect }) => {
           {loading ? <div className="py-12"><Spinner borderColor="border-green-600"/></div> : users.length === 0 ? <div className="text-center py-12 text-gray-500">No users found</div> : (
             <div className="space-y-3">
               {users.map(user => (
-                <div key={user.email} onClick={() => onUserSelect(user)} className="bg-gray-50 hover:bg-green-50 p-4 rounded-lg cursor-pointer border-l-4 border-green-500 hover:shadow-md flex justify-between items-center group transition-all">
+                <div key={user.phone_number || user.user_name} onClick={() => onUserSelect(user)} className="bg-gray-50 hover:bg-green-50 p-4 rounded-lg cursor-pointer border-l-4 border-green-500 hover:shadow-md flex justify-between items-center group transition-all">
                   <div>
                     <p className="text-lg font-semibold text-gray-800 group-hover:text-green-700">{user.user_name}</p>
-                    <p className="text-sm text-gray-600">{user.email}</p>
+                    {/* <p className="text-sm text-gray-600">{user.email}</p> */}{/* [COMMENTED OUT] Email no longer collected */}
                   </div>
                   <div className="flex items-center gap-4">
                      <div className="text-right"><p className="text-2xl font-bold text-green-600">{user.query_count}</p><p className="text-xs text-gray-500">Solved</p></div>
@@ -489,7 +489,7 @@ const GenericUserListModal = ({ title, color, endpoint, onClose }) => {
              <div className="space-y-3">
                {users.map(u => (
                  <div key={u.id} onClick={() => setSelectedUser(u)} className={`bg-gray-50 hover:bg-${color}-50 p-4 rounded-lg cursor-pointer border-l-4 border-${color}-500 hover:shadow-md flex justify-between items-center group transition-all`}>
-                   <div><p className="text-lg font-semibold group-hover:text-${color}-700">{u.user_name}</p><p className="text-sm text-gray-600">{u.email}</p></div>
+                   <div><p className="text-lg font-semibold group-hover:text-${color}-700">{u.user_name}</p>{/* <p className="text-sm text-gray-600">{u.email}</p> */}{/* [COMMENTED OUT] */}</div>
                    <ChevronRight className="text-gray-400 group-hover:text-${color}-600" />
                  </div>
                ))}

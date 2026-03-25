@@ -17,7 +17,7 @@ class DatabaseManager:
             CREATE TABLE IF NOT EXISTS all_users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_name TEXT,
-                email TEXT UNIQUE,
+                email TEXT,
                 phone_number TEXT,
                 first_seen TEXT NOT NULL,
                 last_seen TEXT NOT NULL

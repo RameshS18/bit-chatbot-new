@@ -31,19 +31,27 @@ class UserRepository:
     def create_or_update_user(email, name, phone, timestamp):
         with sqlite3.connect(DB_PATHS["USERS"]) as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT id FROM all_users WHERE email = ?", (email,))
+            # [MODIFIED] Use phone_number instead of email as identifier since email is no longer collected
+            cursor.execute("SELECT id FROM all_users WHERE phone_number = ?", (phone,))
             if cursor.fetchone():
-                cursor.execute("UPDATE all_users SET last_seen = ? WHERE email = ?", (timestamp, email))
+                cursor.execute("UPDATE all_users SET last_seen = ? WHERE phone_number = ?", (timestamp, phone))
                 return "updated"
             else:
                 cursor.execute("INSERT INTO all_users (user_name, email, phone_number, first_seen, last_seen) VALUES (?, ?, ?, ?, ?)",
                                (name, email, phone, timestamp, timestamp))
                 return "created"
 
+    # [COMMENTED OUT] Original email-based update_last_seen
+    # @staticmethod
+    # def update_last_seen(email, timestamp):
+    #     with sqlite3.connect(DB_PATHS["USERS"]) as conn:
+    #         conn.execute("UPDATE all_users SET last_seen = ? WHERE email = ?", (timestamp, email))
+
+    # [NEW] Phone-based update_last_seen since email is no longer collected
     @staticmethod
-    def update_last_seen(email, timestamp):
+    def update_last_seen_by_phone(phone, timestamp):
         with sqlite3.connect(DB_PATHS["USERS"]) as conn:
-            conn.execute("UPDATE all_users SET last_seen = ? WHERE email = ?", (timestamp, email))
+            conn.execute("UPDATE all_users SET last_seen = ? WHERE phone_number = ?", (timestamp, phone))
 
     @staticmethod
     def get_all_users():

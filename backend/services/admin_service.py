@@ -48,9 +48,9 @@ class AdminService:
         return UserRepository.get_today_users(today_str)
 
     @staticmethod
-    def get_user_queries(email):
-        """Fetches history for a specific user."""
-        return EscalationRepository.get_escalations_by_email(email)
+    def get_user_queries(phone):
+        """Fetches history for a specific user by phone."""
+        return EscalationRepository.get_escalations_by_phone(phone)
 
     @staticmethod
     def get_escalated_users_summary():
@@ -60,15 +60,16 @@ class AdminService:
         
         user_map = {}
         for item in pending:
-            email = item.get('email')
-            if email not in user_map:
-                user_map[email] = {
+            # [MODIFIED] Use phone_number instead of email as key since email is no longer collected
+            phone = item.get('phone_number')
+            if phone not in user_map:
+                user_map[phone] = {
                     "user_name": item.get('user_name'),
-                    "email": email,
-                    "phone_number": item.get('phone_number'),
+                    # "email": email, # [COMMENTED OUT] Email no longer collected
+                    "phone_number": phone,
                     "query_count": 0
                 }
-            user_map[email]['query_count'] += 1
+            user_map[phone]['query_count'] += 1
             
         result = list(user_map.values())
         result.sort(key=lambda x: x['query_count'], reverse=True)
@@ -82,15 +83,16 @@ class AdminService:
         
         user_map = {}
         for item in solved:
-            email = item.get('email')
-            if email not in user_map:
-                user_map[email] = {
+            # [MODIFIED] Use phone_number instead of email as key since email is no longer collected
+            phone = item.get('phone_number')
+            if phone not in user_map:
+                user_map[phone] = {
                     "user_name": item.get('user_name'),
-                    "email": email,
-                    "phone_number": item.get('phone_number'),
+                    # "email": email, # [COMMENTED OUT] Email no longer collected
+                    "phone_number": phone,
                     "query_count": 0
                 }
-            user_map[email]['query_count'] += 1
+            user_map[phone]['query_count'] += 1
             
         result = list(user_map.values())
         result.sort(key=lambda x: x['query_count'], reverse=True)

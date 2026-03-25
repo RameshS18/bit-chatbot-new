@@ -45,3 +45,15 @@ class EscalationRepository:
         except Exception as e:
             print(f"Error fetching user queries: {e}")
             return []
+
+    # [NEW] Phone-based escalation lookup since email is no longer collected
+    @staticmethod
+    def get_escalations_by_phone(phone):
+        try:
+            with sqlite3.connect(DB_PATHS["ESCALATION"]) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.execute("SELECT * FROM escalated_queries WHERE phone_number = ? ORDER BY timestamp DESC", (phone,))
+                return [dict(row) for row in cursor.fetchall()]
+        except Exception as e:
+            print(f"Error fetching user queries by phone: {e}")
+            return []

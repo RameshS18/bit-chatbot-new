@@ -15,12 +15,14 @@ class ChatService:
         self.llm_client = llm_client
 
     def process_query(self, user_name, email, phone, query):
-        if not query or not email:
-            return {"error": "Query and email required"}, 400
+        if not query:
+            return {"error": "Query is required"}, 400
             
         # 1. Update Last Seen
         timestamp = datetime.now(IST).isoformat()
-        UserRepository.update_last_seen(email, timestamp)
+        # [MODIFIED] Use phone instead of email for tracking since email is no longer collected
+        if phone:
+            UserRepository.update_last_seen_by_phone(phone, timestamp)
         
         # 2. Classify Query
         category = self.llm_client.classify_query(query)

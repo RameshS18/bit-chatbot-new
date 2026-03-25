@@ -50,9 +50,10 @@ def get_escalated_users():
 def get_solved_users():
     return jsonify(AdminService.get_solved_users_summary())
 
-@admin_bp.route('/user-queries/<email>', methods=['GET'])
-def get_user_queries(email):
-    return jsonify(AdminService.get_user_queries(email))
+# [MODIFIED] Use phone instead of email for user query lookup
+@admin_bp.route('/user-queries/<phone>', methods=['GET'])
+def get_user_queries(phone):
+    return jsonify(AdminService.get_user_queries(phone))
 
 # --- Editor/Staff Logs ---
 @admin_bp.route('/editor-staff', methods=['GET'])

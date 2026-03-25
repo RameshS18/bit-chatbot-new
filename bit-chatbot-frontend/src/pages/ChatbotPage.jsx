@@ -63,7 +63,7 @@ const ChatbotPage = () => {
 
       // 3. Parse Data
       const parsedUser = JSON.parse(storedUser);
-      if (!parsedUser || !parsedUser.name || !parsedUser.email || !parsedUser.phone) {
+      if (!parsedUser || !parsedUser.name || !parsedUser.phone) { // [MODIFIED] Email no longer required
         throw new Error("Corrupted or incomplete session data");
       }
 
@@ -120,12 +120,12 @@ const ChatbotPage = () => {
       initialLoadRef.current = false;
       const loginUser = async () => {
         try {
-          const response = await fetch('/api/login', {
+          const response = await fetch('/api/direct-login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               name: userData.name,
-              email: userData.email,
+              // email: userData.email, // [COMMENTED OUT] Email no longer collected
               phone: userData.phone
             })
           });
@@ -424,7 +424,7 @@ const ChatbotPage = () => {
         body: JSON.stringify({
           query: trimmedInput,
           user_name: userData.name,
-          email: userData.email,
+          // email: userData.email, // [COMMENTED OUT] Email no longer collected
           phone_number: userData.phone
         }),
         signal: controller.signal

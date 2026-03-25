@@ -34,7 +34,7 @@ auth_bp = Blueprint('auth', __name__)
 def direct_login():
     data = request.json
     response, status = AuthService.direct_login(
-        data.get('email'),
+        # data.get('email'),  # [COMMENTED OUT] Email no longer collected from user
         data.get('name'),
         data.get('phone')
     )

@@ -58,10 +58,11 @@ class AuthService:
     # [NEW] Direct login — no OTP, no user type selection, just register/update and login
     # ========================================================================================
     @staticmethod
-    def direct_login(email, name, phone):
+    def direct_login(name, phone, email=None):
         # Validation
-        if not email:
-            return {"error": "Email is required"}, 400
+        # [COMMENTED OUT] Email validation — email no longer collected
+        # if not email:
+        #     return {"error": "Email is required"}, 400
         if not name:
             return {"error": "Name is required"}, 400
         if not phone:
@@ -70,7 +71,8 @@ class AuthService:
         current_time = datetime.now(IST).isoformat()
         
         # Create or Update User (same DB logic as before, just without OTP check)
+        # [MODIFIED] email passed as None since it's no longer collected
         action = UserRepository.create_or_update_user(email, name, phone, current_time)
         msg = "Login successful" if action == "updated" else "Registration successful"
         
-        return {"status": "success", "message": msg, "email": email}, 200
+        return {"status": "success", "message": msg}, 200

@@ -6,7 +6,7 @@ const LandingPage = () => {
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
-    email: '',
+    // email: '', // [COMMENTED OUT] Email no longer collected from user
     user_type: 'Student', // [KEPT] default user_type — no longer asked but kept for DB compatibility
   });
   // [COMMENTED OUT] OTP state — kept for future re-enablement
@@ -40,7 +40,7 @@ const LandingPage = () => {
       timer = setTimeout(() => {
         localStorage.setItem('bitChatbotUser', JSON.stringify({
           name: formData.name,
-          email: formData.email,
+          // email: formData.email, // [COMMENTED OUT] Email no longer collected
           phone: formData.phone,
           userType: formData.user_type.toLowerCase()
         }));
@@ -52,8 +52,8 @@ const LandingPage = () => {
 
   // Auto-focus and scroll into view to prevent keyboard hiding input
   useEffect(() => {
-    // [MODIFIED] Direct login — only 3 steps (0, 1, 2), always focus input
-    if (inputRef.current && currentStep < 3 && !showAdminLogin) {
+    // [MODIFIED] Direct login — only 2 steps (0=name, 1=phone), always focus input
+    if (inputRef.current && currentStep < 2 && !showAdminLogin) {
       inputRef.current.focus();
       // Scroll input into view when keyboard appears on mobile
       setTimeout(() => {
@@ -114,7 +114,7 @@ const LandingPage = () => {
 
     try {
       // Basic checks
-      if (!formData.name || !formData.email || !formData.phone) {
+      if (!formData.name || !formData.phone) {
         setError('Please fill in all fields');
         setIsLoading(false);
         return;
@@ -127,13 +127,13 @@ const LandingPage = () => {
       //   return;
       // }
       
-      // Validation on other fields
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(formData.email)) {
-        setError('Please enter a valid email address');
-        setIsLoading(false);
-        return;
-      }
+      // [COMMENTED OUT] Email validation — email no longer collected
+      // const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      // if (!emailRegex.test(formData.email)) {
+      //   setError('Please enter a valid email address');
+      //   setIsLoading(false);
+      //   return;
+      // }
 
       const phoneRegex = /^[0-9]{10}$/;
       if (!phoneRegex.test(formData.phone)) {
@@ -142,7 +142,7 @@ const LandingPage = () => {
         return;
       }
 
-      // [NEW] Direct login — no OTP, just name + email + phone
+      // [MODIFIED] Direct login — no OTP, no email, just name + phone
       const response = await fetch('/api/direct-login', {
         method: 'POST',
         headers: {
@@ -150,7 +150,7 @@ const LandingPage = () => {
         },
         body: JSON.stringify({
           name: formData.name,
-          email: formData.email,
+          // email: formData.email, // [COMMENTED OUT] Email no longer collected
           phone: formData.phone,
           // [COMMENTED OUT] otp: otp, — no longer sent
         }),
@@ -225,7 +225,7 @@ const LandingPage = () => {
   };
 
   // ========================================================================================
-  // [MODIFIED] handleNext — direct login, only 3 steps (0=name, 1=phone, 2=email)
+  // [MODIFIED] handleNext — direct login, only 2 steps (0=name, 1=phone)
   // ========================================================================================
   const handleNext = () => {
     if (!isStepValid()) return;
@@ -237,8 +237,8 @@ const LandingPage = () => {
     //   setCurrentStep(currentStep + 1);
     // }
 
-    // [NEW] Direct login — step 2 (email) is the last input step, move forward for steps 0 and 1
-    if (currentStep < 2) {
+    // [MODIFIED] Direct login — step 1 (phone) is the last input step, move forward for step 0 only
+    if (currentStep < 1) {
       setCurrentStep(currentStep + 1);
     }
   };
@@ -251,13 +251,13 @@ const LandingPage = () => {
   };
 
   // ========================================================================================
-  // [MODIFIED] isStepValid — only 3 steps, no user type or OTP validation
+  // [MODIFIED] isStepValid — only 2 steps, no email, user type or OTP validation
   // ========================================================================================
   const isStepValid = () => {
     switch (currentStep) {
       case 0: return formData.name.trim().length > 0;
       case 1: return formData.phone.trim().length === 10 && /^\d+$/.test(formData.phone);
-      case 2: return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email);
+      // case 2: return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email); // [COMMENTED OUT] Email step removed
       // [COMMENTED OUT] case 3: return formData.user_type !== '';
       // [COMMENTED OUT] case 4: return otp.trim().length === 6 && /^\d+$/.test(otp);
       default: return false;
@@ -265,14 +265,14 @@ const LandingPage = () => {
   };
 
   // ========================================================================================
-  // [MODIFIED] handleKeyPress — step 2 (email) is now the final step
+  // [MODIFIED] handleKeyPress — step 1 (phone) is now the final step
   // ========================================================================================
   const handleKeyPress = (e) => {
     if (e.key === 'Enter' && isStepValid()) {
-      if (currentStep < 2) {
+      if (currentStep < 1) {
         handleNext();
       } else {
-        // [NEW] Step 2 is the last step — submit directly
+        // [MODIFIED] Step 1 is the last step — submit directly
         handleSubmit();
       }
     }
@@ -324,26 +324,29 @@ const LandingPage = () => {
             />
           </div>
         );
-      case 2:
-        return (
-          <div>
-            <label htmlFor="email-input" className="block text-xl sm:text-2xl font-bold mb-4 sm:mb-6 text-white">
-              Email address
-            </label>
-            <input 
-              id="email-input"
-              ref={inputRef}
-              type="email" 
-              name="email" 
-              placeholder="your.email@example.com" 
-              value={formData.email} 
-              onChange={handleChange} 
-              onKeyPress={handleKeyPress}
-              className={inputClass} 
-              autoComplete="email"
-            />
-          </div>
-        );
+      // ========================================================================================
+      // [COMMENTED OUT] Email step — email no longer collected from user
+      // ========================================================================================
+      // case 2:
+      //   return (
+      //     <div>
+      //       <label htmlFor="email-input" className="block text-xl sm:text-2xl font-bold mb-4 sm:mb-6 text-white">
+      //         Email address
+      //       </label>
+      //       <input 
+      //         id="email-input"
+      //         ref={inputRef}
+      //         type="email" 
+      //         name="email" 
+      //         placeholder="your.email@example.com" 
+      //         value={formData.email} 
+      //         onChange={handleChange} 
+      //         onKeyPress={handleKeyPress}
+      //         className={inputClass} 
+      //         autoComplete="email"
+      //       />
+      //     </div>
+      //   );
       // ========================================================================================
       // [COMMENTED OUT] User Type step — kept for future re-enablement
       // ========================================================================================
@@ -613,9 +616,9 @@ const LandingPage = () => {
                     <p className="text-sm sm:text-base text-white/65">Fill in your details to begin your journey</p>
                   </div>
 
-                  {/* [MODIFIED] Progress bar — now 3 steps only (name, phone, email) */}
+                  {/* [MODIFIED] Progress bar — now 2 steps only (name, phone) */}
                   <div className="flex gap-2 sm:gap-3 mb-6 sm:mb-8 justify-center">
-                    {[0, 1, 2].map((s) => (
+                    {[0, 1].map((s) => (
                       <div 
                         key={s} 
                         className={`h-1.5 w-12 sm:w-14 rounded-full transition-all duration-300 ${
@@ -637,8 +640,8 @@ const LandingPage = () => {
                         Back
                       </button>
                     )}
-                    {/* [MODIFIED] Direct login — show "Next" for steps 0-1, show "Submit" on step 2 */}
-                    {currentStep < 2 ? (
+                    {/* [MODIFIED] Direct login — show "Next" for step 0, show "Submit" on step 1 */}
+                    {currentStep < 1 ? (
                       <button 
                         type="button" 
                         onClick={handleNext} 
